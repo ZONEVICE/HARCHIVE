@@ -1,0 +1,17 @@
+{
+  "name": "harchive_backend",
+  "version": "1",
+  "description": "Harchive backend",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "ZONEVICE",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "better-sqlite3": "11.9.1",
+    "cookie-parser": "1.4.7",
+    "cors": "2.8.5",
+    "dotenv": "16.4.7",
+    "express": "4.21.2"
+  }
+}

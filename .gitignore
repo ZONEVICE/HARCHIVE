@@ -1,0 +1,12 @@
+node_modules/
+test/
+.env
+data/
+ignore.*
+
+# no code
+
+*.odt
+*.odt#
+docs/figures.excalidraw
+project_manager
