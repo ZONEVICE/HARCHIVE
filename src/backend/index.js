@@ -1,5 +1,5 @@
 const constants = require('./logical/constants')
-const io = require('./logical/io')
+const io = require('./helpers/io')
 
 // --------------------------------------------------------------------------------
 // Creates data directory if not exists

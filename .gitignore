@@ -3,10 +3,11 @@ test/
 .env
 data/
 ignore.*
+ig.*
 
 # no code
 
 *.odt
 *.odt#
-docs/figures.excalidraw
+docs/
 project_manager
