@@ -1,33 +1,27 @@
 const _ = {}
 
-const Database = require('better-sqlite3')
 const constants = require('../logical/constants')
 const SettingsModel = require('../models/settings')
-const ss = require('../db/settings')
+const io = require('../helpers/io')
+const db_init = require('../logical/db_init')
+const json_helper = require('../helpers/json')
 
-_.create_table = () => {
-    const db = new Database(constants.DATABASE_FILE_PATH)
-    db.exec(ss.CREATE_TABLE)
-    db.close()
+_.LoadData = () => {
+    const json = io.read_json_file(constants.DATABASE_FILE_PATH_SETTINGS)
+    let settings = new SettingsModel()
+    settings = json_helper.JSONToClass(json, settings)
+    return settings
 }
 
-_.insert_default_record = () => {
-    const db = new Database(constants.DATABASE_FILE_PATH)
-    db.exec(ss.INSERT_DEFAULT_RECORD)
-    db.close()
-}
-
-_.load_data = () => {
-    const db = new Database(constants.DATABASE_FILE_PATH)
-    let res = db.prepare(ss.SELECT_ALL)
-    res = res.get()
-    db.close()
-    sm = new SettingsModel(Object.values(res)[1], Object.values(res)[2])
-    return sm
-}
-
-_.save_data = () => {
-
+_.SaveData = settings => {
+    if (io.path_exists(constants.DATABASE_FILE_PATH_SETTINGS) === false)
+        db_init.create_database_files();
+    console.log(json_helper.ClassToJSON(settings))
+    io.write_json_file(
+        constants.DATABASE_FILE_PATH_SETTINGS,
+        json_helper.ClassToJSON(settings)
+    )
+    return settings
 }
 
 module.exports = _

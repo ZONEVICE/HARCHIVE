@@ -14,16 +14,14 @@ if (io.path_exists(constants.DATA_DIRECTORY) === false) {
 // Creates database file if it does not exist
 // Fills database file with tables and initial data if not found
 // --------------------------------------------------------------------------------
-const db_init = require('./db/init')
-db_init.create_database_file()
-db_init.resolve_database_empty()
+const db_init = require('./logical/db_init')
+db_init.create_database_files()
 
 // --------------------------------------------------------------------------------
 // Loads app settings
 // --------------------------------------------------------------------------------
 const settings_controller = require('./controllers/settings')
-const settings_model = settings_controller.load_data()
-console.log(settings_model)
+const settings_model = settings_controller.LoadData()
 
 // --------------------------------------------------------------------------------
 // Starts web server

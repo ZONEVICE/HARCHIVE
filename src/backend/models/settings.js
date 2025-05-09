@@ -1,8 +1,16 @@
-const settings_controller = require('../controllers/settings')
-
 module.exports = class Settings {
-    constructor(allow_downloads, allow_file_system_browser) {
-        this.allow_downloads = allow_downloads
-        this.allow_file_system_browser = allow_file_system_browser
+
+    constructor(options = {}) {
+        const defaults = {
+            allow_downloads: true,
+            allow_file_system_browser: true,
+            register_logs: true,
+        };
+
+            for (const key of Object.keys(defaults)) {
+            // Sets class properties.
+            this[key] = options.hasOwnProperty(key) ? options[key] : defaults[key];
+        }
     }
+
 }

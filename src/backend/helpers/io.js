@@ -21,4 +21,14 @@ _.create_file = (path, content = undefined) => {
     fs.writeFileSync(path, content, 'utf-8')
 }
 
+_.read_json_file = path => {
+    if (_.path_exists(path) === false) return {};
+    return fs.readFileSync(path)
+}
+
+_.write_json_file = (path, content) => {
+    if (_.path_exists(path) === false) _.create_file(path, content);
+    else fs.writeFileSync(path, content);
+}
+
 module.exports = _
