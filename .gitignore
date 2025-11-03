@@ -1,12 +1,11 @@
+# General
 node_modules/
 test/
 .env
 data/
 ignore.*
 ig.*
-
-# no code
-
+# No code.
 *.odt
 *.odt#
 docs/

@@ -1,7 +1,7 @@
-module.exports = class Element {
+module.exports = class Item {
     id = ''
     name = ''
-    element_type = ''
+    item_type = ''
     date_scan = ''
     date_creation = ''
     date_last_modification = ''
