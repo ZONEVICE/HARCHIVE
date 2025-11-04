@@ -1,27 +1,50 @@
 const _ = {}
 
-const constants = require('../logical/constants')
-const SettingsModel = require('../models/settings')
-const io = require('../helpers/io')
-const db_init = require('../logical/db_init')
-const json_helper = require('../helpers/json')
+const db = require('../logical/db');
+const Model = require('./model');
 
 _.LoadData = () => {
-    const json = io.read_json_file(constants.DATABASE_FILE_PATH_SETTINGS)
-    let settings = new SettingsModel()
-    settings = json_helper.JSONToClass(json, settings)
-    return settings
+    const _db = db.GetConnection();
+    const res = _db.prepare('SELECT * FROM SETTINGS').all();
+    return new Model(res[0]);
 }
 
-_.SaveData = settings => {
-    if (io.path_exists(constants.DATABASE_FILE_PATH_SETTINGS) === false)
-        db_init.create_database_files();
-    console.log(json_helper.ClassToJSON(settings))
-    io.write_json_file(
-        constants.DATABASE_FILE_PATH_SETTINGS,
-        json_helper.ClassToJSON(settings)
-    )
-    return settings
+_.SaveData = s => {
+    const _db = db.GetConnection();
+    const query = `UPDATE SETTINGS
+    SET allow_downloads = ?,
+    allow_file_system_browser = ?,
+    register_logs = ?
+    WHERE id = 1`;
+    const res = _db.prepare(query).run(s.allow_downloads, s.allow_file_system_browser, s.register_logs);
+    return res.changes === 1;
+}
+
+_.CreateTable = () => {
+    const query = `CREATE TABLE IF NOT EXISTS SETTINGS (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        allow_downloads INTEGER NOT NULL DEFAULT 1,
+        allow_file_system_browser INTEGER NOT NULL DEFAULT 1,
+        register_logs INTEGER NOT NULL DEFAULT 1
+    )`;
+    const _db = db.GetConnection();
+    _db.exec(query);
+    _db.close();
+};
+
+_.CreateDefaultRecord = () => {
+    const _select = `SELECT * from SETTINGS`;
+    const _db = db.GetConnection();
+    let res = _db.prepare(_select).all();
+
+    if (res.length === 0) {
+        const _insert = `INSERT INTO SETTINGS
+        (allow_downloads, allow_file_system_browser, register_logs)
+        VALUES (1, 1, 1)`;
+        _db.exec(_insert);
+    }
+
+    _db.close();
 }
 
 module.exports = _

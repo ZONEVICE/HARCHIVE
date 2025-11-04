@@ -1,10 +1,10 @@
 const fs = require('fs')
 const _ = {}
 
-// checks directories or binaries
-_.path_exists = path => fs.existsSync(path)
+// Can check both directory and file existence.
+_.PathExists = path => fs.existsSync(path)
 
-_.read_directory_content = path => {
+_.ReadDirectoryContent = path => {
     if (fs.existsSync(path) === false) {
         console.warn(`Directory "${path}" does not exist.`)
         return []
@@ -12,23 +12,37 @@ _.read_directory_content = path => {
     return fs.readdirSync(path)
 }
 
-_.create_directory = path => {
+_.CreateDirectory = path => {
     if (fs.existsSync(path) === false) fs.mkdirSync(path);
 }
 
-_.create_file = (path, content = undefined) => {
+_.CreateFile = (path, content = undefined) => {
     if (content == undefined) content = '';
     fs.writeFileSync(path, content, 'utf-8')
 }
 
-_.read_json_file = path => {
-    if (_.path_exists(path) === false) return {};
+_.ReadJsonFile = path => {
+    if (_.PathExists(path) === false) return {};
     return fs.readFileSync(path)
 }
 
-_.write_json_file = (path, content) => {
-    if (_.path_exists(path) === false) _.create_file(path, content);
+_.WriteJsonFile = (path, content) => {
+    if (_.PathExists(path) === false) _.CreateFile(path, content);
     else fs.writeFileSync(path, content);
+}
+
+_.CopyFile = (source, destination) => {
+    if (_.PathExists(source) === false) {
+        console.warn(`Source file "${source}" does not exist.`);
+        return;
+    }
+    fs.copyFileSync(source, destination);
+}
+
+_.DeleteFile = (path) => {
+    if (_.PathExists(path)) {
+        fs.unlinkSync(path);
+    }
 }
 
 module.exports = _

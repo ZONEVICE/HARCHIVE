@@ -1,33 +1,20 @@
-const constants = require('./logical/constants')
-const io = require('./helpers/io')
+const db = require('./logical/db')
 
 // --------------------------------------------------------------------------------
-// Creates data directory if not exists
+// Creates data directory and database if not exist.
 // --------------------------------------------------------------------------------
-if (io.path_exists(constants.DATA_DIRECTORY) === false) {
-    console.warn('WARN: data directory not found. Creating...')
-    io.create_directory(constants.DATA_DIRECTORY)
-    console.log('Data directory created.')
-}
+db.CreateDatabaseFile()
 
 // --------------------------------------------------------------------------------
-// Creates database file if it does not exist
-// Fills database file with tables and initial data if not found
+// Processes database tables and default data if needed.
 // --------------------------------------------------------------------------------
-const db_init = require('./logical/db_init')
-db_init.create_database_files()
-
-// --------------------------------------------------------------------------------
-// Loads app settings
-// --------------------------------------------------------------------------------
-const settings_controller = require('./controllers/settings')
-const settings_model = settings_controller.LoadData()
+const settings_controller = require('./settings/controller');
+settings_controller.CreateTable();
+settings_controller.CreateDefaultRecord();
 
 // --------------------------------------------------------------------------------
 // Starts web server
 // --------------------------------------------------------------------------------
-console.log('Ok > todo start backend service')
-
 const app = require('./web/server');
 const { PORT } = require('./logical/env');
 

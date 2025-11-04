@@ -3,14 +3,21 @@
   "version": "0.1.0",
   "description": "Harchive backend",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "jest"
   },
   "author": "ZONEVICE",
   "license": "GPL-3.0-only",
   "dependencies": {
+    "better-sqlite3": "12.4.1",
     "cookie-parser": "1.4.7",
     "cors": "2.8.5",
     "dotenv": "17.2.3",
     "express": "5.1.0"
+  },
+  "devDependencies": {
+    "jest": "30.2.0",
+    "nodemon": "3.1.10"
   }
 }
