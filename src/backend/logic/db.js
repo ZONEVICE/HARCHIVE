@@ -1,6 +1,6 @@
 const _ = {}
 
-const { DATA_DIRECTORY, DATABASE_FILE_PATH } = require('../logical/constants')
+const { DATA_DIRECTORY, DATABASE_FILE_PATH } = require('../logic/constants')
 const { PathExists, CreateDirectory, CreateFile } = require('./io')
 
 _.CreateDatabaseFile = () => {

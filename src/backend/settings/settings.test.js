@@ -1,6 +1,6 @@
-const { DeleteFile } = require('../logical/io');
-const { DATABASE_FILE_PATH } = require('../logical/constants')
-const _db = require('../logical/db');
+const { DeleteFile } = require('../logic/io');
+const { DATABASE_FILE_PATH } = require('../logic/constants')
+const _db = require('../logic/db');
 
 const settings_controller = require('./controller');
 const settings_model = require('./model');

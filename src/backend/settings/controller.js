@@ -1,6 +1,6 @@
 const _ = {}
 
-const db = require('../logical/db');
+const db = require('../logic/db');
 const Model = require('./model');
 
 _.LoadData = () => {

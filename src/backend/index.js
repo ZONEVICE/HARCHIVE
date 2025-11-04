@@ -1,4 +1,4 @@
-const db = require('./logical/db')
+const db = require('./logic/db')
 
 // --------------------------------------------------------------------------------
 // Creates data directory and database if not exist.
@@ -16,6 +16,6 @@ settings_controller.CreateDefaultRecord();
 // Starts web server
 // --------------------------------------------------------------------------------
 const app = require('./web/server');
-const { PORT } = require('./logical/env');
+const { PORT } = require('./logic/env');
 
 app.listen(PORT, () => { console.log(`Harchive backend listening on port: ${PORT}.`); });
