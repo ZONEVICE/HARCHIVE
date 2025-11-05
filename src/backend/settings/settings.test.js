@@ -2,19 +2,19 @@ const { DeleteFile } = require('../logic/io');
 const { DATABASE_FILE_PATH } = require('../logic/constants')
 const _db = require('../logic/db');
 
-const settings_controller = require('./controller');
+const settings_controller_db = require('./controller_db');
 const settings_model = require('./model');
 
 // https://jestjs.io/docs/expect
 
-describe('Settings Controller', () => {
-    it('Remove and create database file for testing', () => {
-        DeleteFile(DATABASE_FILE_PATH);
-        _db.CreateDatabaseFile();
+describe('Settings Tests', () => {
+    it('Remove and create database file for testing', async () => {
+        await DeleteFile(DATABASE_FILE_PATH);
+        await _db.CreateDatabaseFile();
     });
     describe('CreateTable', () => {
-        it('should create the settings table if it does not exist', () => {
-            settings_controller.CreateTable();
+        it('Should create the settings table if it does not exist', () => {
+            settings_controller_db.CreateTable();
             const __db = _db.GetConnection();
             const res = __db.prepare('SELECT * FROM SETTINGS').all();
             __db.close();
@@ -22,8 +22,8 @@ describe('Settings Controller', () => {
         });
     });
     describe('CreateDefaultRecord', () => {
-        it('should create a default record if no records exist', () => {
-            settings_controller.CreateDefaultRecord();
+        it('Should create a default record if no records exist', () => {
+            settings_controller_db.CreateDefaultRecord();
             const __db = _db.GetConnection();
             const res = __db.prepare('SELECT * FROM SETTINGS').all();
             __db.close();
@@ -33,7 +33,7 @@ describe('Settings Controller', () => {
     });
     describe('LoadData', () => {
         it('Load data correctly', () => {
-            const settings_data = settings_controller.LoadData();
+            const settings_data = settings_controller_db.LoadData();
             expect(typeof settings_data).toBe('object');
             expect(settings_data).not.toHaveProperty('id');
             expect(settings_data).toHaveProperty('allow_downloads');
@@ -42,17 +42,17 @@ describe('Settings Controller', () => {
         });
     });
     describe('SaveData', () => {
-        it('should save data correctly', () => {
+        it('Should save data correctly', () => {
             // First load existing settings.
             const settings_updated = new settings_model({
                 allow_downloads: 0,
                 allow_file_system_browser: 0,
                 register_logs: 0,
             });
-            const res = settings_controller.SaveData(settings_updated);
+            const res = settings_controller_db.SaveData(settings_updated);
             expect(res).toBe(true);
             // Load data again to verify changes.
-            const settings_data = settings_controller.LoadData();
+            const settings_data = settings_controller_db.LoadData();
             expect(settings_data.allow_downloads).toBe(0);
             expect(settings_data.allow_file_system_browser).toBe(0);
             expect(settings_data.register_logs).toBe(0);

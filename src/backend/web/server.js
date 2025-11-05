@@ -17,5 +17,6 @@ app.use(cookie_parser('secret'))                           // Cookie handler.
 // Routes.
 // ----------------
 require('./api/index/routes')(app)
+require('../user/routes')(app)
 
 module.exports = app

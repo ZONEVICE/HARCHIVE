@@ -6,4 +6,5 @@ module.exports = class Item {
     date_creation = ''
     date_last_modification = ''
     tags = []
+    favorite = false
 }
