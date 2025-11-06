@@ -1,5 +1,5 @@
 const { DeleteFile } = require('../logic/io');
-const { DATABASE_FILE_PATH, ADMIN_USERNAME } = require('../logic/constants')
+const { DATABASE_FILE_PATH, ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../logic/constants')
 const { PORT } = require('../logic/env')
 const URL = `http://localhost:${PORT}`;
 
@@ -66,7 +66,7 @@ describe('User Tests', () => {
             expect(user.password).toBe('newpassword');
         });
     });
-    describe('Login', () => {
+    describe('API /Login', () => {
         it('Login is successfull', async () => {
             const res = await axios.post(`${URL}/api/user/login/`, {
                 password: 'newpassword'
@@ -82,6 +82,45 @@ describe('User Tests', () => {
             } catch (error) {
                 expect(error.response.data.status).toBe('warning');
                 expect(error.response.data.description).toBe('invalid credentials');
+            }
+        });
+    });
+    describe('API / Change Password', () => {
+        it('Change password is successful', async () => {
+            const res = await axios.post(`${URL}/api/user/change_password/`, {
+                old_password: 'newpassword', // in previous test we set it to 'newpassword'
+                new_password: 'finalpassword'
+            });
+            expect(res.data.status).toBe('success');
+            expect(res.data.description).toBe('password changed successfully');
+
+            // Verify login with new password
+            const loginRes = await axios.post(`${URL}/api/user/login/`, {
+                password: 'finalpassword'
+            });
+            expect(loginRes.data.status).toBe('success');
+            expect(loginRes.data.description).toBe('login successful');
+        });
+        it('Change password fails with invalid credentials', async () => {
+            try {
+                const res = await axios.post(`${URL}/api/user/change_password/`, {
+                    old_password: 'wrongpassword',
+                    new_password: 'e'
+                });
+            } catch (error) {
+                expect(error.response.data.status).toBe('warning');
+                expect(error.response.data.description).toBe('invalid credentials');
+            }
+        });
+         it('Additional > Revert password to default password', async () => {
+            try {
+                const res = await axios.post(`${URL}/api/user/change_password/`, {
+                    old_password: 'finalpassword',
+                    new_password: ADMIN_DEFAULT_PASSWORD
+                });
+            } catch (error) {
+                expect(error.response.data.status).toBe('success');
+                expect(error.response.data.description).toBe('password changed successfully');
             }
         });
     });

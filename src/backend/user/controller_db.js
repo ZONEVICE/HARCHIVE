@@ -2,7 +2,7 @@ const _ = {};
 
 const db = require('../logic/db');
 const Model = require('./model');
-const { ADMIN_USERNAME } = require('../logic/constants');
+const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../logic/constants');
 
 _.CreateTable = () => {
     const query = `CREATE TABLE IF NOT EXISTS USER (
@@ -21,7 +21,7 @@ _.CreateAdminUser = () => {
     let res = _db.prepare(_select).all();
     if (res.length === 0) {
         const _insert = `INSERT INTO USER (id, username, password)
-            VALUES ('1', '${ADMIN_USERNAME}', 'changeme')`;
+            VALUES ('1', '${ADMIN_USERNAME}', '${ADMIN_DEFAULT_PASSWORD}')`;
         _db.exec(_insert);
     }
     _db.close();
