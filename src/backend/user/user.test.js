@@ -10,9 +10,9 @@ const user_controller_db = require('./controller_db');
 const user_model = require('./model');
 
 describe('User Tests', () => {
-    it('Remove and create database file for testing', async () => {
-        await DeleteFile(DATABASE_FILE_PATH);
-        await _db.CreateDatabaseFile();
+    it('DROP and CREATE table for testing', async () => {
+        await user_controller_db.DropTable();
+        await user_controller_db.CreateTable();
     });
     describe('CREATE TABLE', () => {
         it('Should create USER table', () => {

@@ -15,6 +15,13 @@ _.CreateTable = () => {
     _db.close();
 }
 
+_.DropTable = () => {
+    const query = `DROP TABLE IF EXISTS USER`;
+    const _db = db.GetConnection();
+    _db.exec(query);
+    _db.close();
+}
+
 _.CreateAdminUser = () => {
     const _select = `SELECT * FROM USER WHERE username = '${ADMIN_USERNAME}'`;
     const _db = db.GetConnection();

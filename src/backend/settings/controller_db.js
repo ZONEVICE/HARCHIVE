@@ -20,6 +20,13 @@ _.SaveData = s => {
     return res.changes === 1;
 }
 
+_.DropTable = () => {
+    const query = `DROP TABLE IF EXISTS SETTINGS`;
+    const _db = db.GetConnection();
+    _db.exec(query);
+    _db.close();
+}
+
 _.CreateTable = () => {
     const query = `CREATE TABLE IF NOT EXISTS SETTINGS (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

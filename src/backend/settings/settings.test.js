@@ -8,9 +8,9 @@ const settings_model = require('./model');
 // https://jestjs.io/docs/expect
 
 describe('Settings Tests', () => {
-    it('Remove and create database file for testing', async () => {
-        await DeleteFile(DATABASE_FILE_PATH);
-        await _db.CreateDatabaseFile();
+    it('DROP and CREATE table for testing', async () => {
+        await settings_controller_db.DropTable();
+        await settings_controller_db.CreateTable();
     });
     describe('CreateTable', () => {
         it('Should create the settings table if it does not exist', () => {
