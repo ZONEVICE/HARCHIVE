@@ -69,6 +69,27 @@ _.SelectOneById = id => {
     return null;
 }
 
+/**
+ * Returns multiple relations based on a WHERE clause.
+ * @param {String} whereClause - example: "table_1 = ? AND table_2 = ?"
+ * @param {Array} params - array of parameters to replace the placeholders in the whereClause
+ * @returns 
+ */
+_.SelectManyByWhere = (whereClause, params) => {
+    const query = `SELECT * FROM RELATION WHERE ${whereClause}`;
+    const _db = db.GetConnection();
+    let res = _db.prepare(query).all(params);
+    _db.close();
+
+    let relations = [];
+    for (let row of res) {
+        let relation = new Model();
+        relation.SetObjectFromDBRows(row);
+        relations.push(relation);
+    }
+    return relations;
+}
+
 _.UpdateRelation = relation => {
     const query = `UPDATE RELATION SET
         id_1 = ?,
