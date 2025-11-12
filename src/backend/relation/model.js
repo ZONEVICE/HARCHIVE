@@ -5,6 +5,7 @@ module.exports = class Relation {
     table_1 = ''
     table_2 = ''
     relation_type = ''
+    metadata = ''
 
     /**
      * Assings properties from init object.

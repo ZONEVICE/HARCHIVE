@@ -69,20 +69,73 @@ _.SelectOneById = id => {
     return null;
 }
 
-/**
- * Returns multiple relations based on a WHERE clause.
- * @param {String} whereClause - example: "table_1 = ? AND table_2 = ?"
- * @param {Array} params - array of parameters to replace the placeholders in the whereClause
- * @returns 
- */
-_.SelectManyByWhere = (whereClause, params) => {
-    const query = `SELECT * FROM RELATION WHERE ${whereClause}`;
+_.SelectManyId1 = id_1 => {
+    const query = `SELECT * FROM RELATION WHERE id_1 = ?`;
     const _db = db.GetConnection();
-    let res = _db.prepare(query).all(params);
+    let rows = _db.prepare(query).all(id_1);
     _db.close();
 
     let relations = [];
-    for (let row of res) {
+    for (let row of rows) {
+        let relation = new Model();
+        relation.SetObjectFromDBRows(row);
+        relations.push(relation);
+    }
+    return relations;
+}
+
+_.SelectOneById1NId2 = (id_1, id_2) => {
+    const query = `SELECT * FROM RELATION WHERE id_1 = ? AND id_2 = ?`;
+    const _db = db.GetConnection();
+    let row = _db.prepare(query).get(id_1, id_2);
+    _db.close();
+
+    if (row) {
+        let relation = new Model();
+        relation.SetObjectFromDBRows(row);
+        return relation;
+    }
+    return null;
+}
+
+_.SelectManyByTable1 = table_1 => {
+    const query = `SELECT * FROM RELATION WHERE table_1 = ?`;
+    const _db = db.GetConnection();
+    let rows = _db.prepare(query).all(table_1);
+    _db.close();
+
+    let relations = [];
+    for (let row of rows) {
+        let relation = new Model();
+        relation.SetObjectFromDBRows(row);
+        relations.push(relation);
+    }
+    return relations;
+}
+
+_.SelectManyByTable1NTable2 = (table_1, table_2) => {
+    const query = `SELECT * FROM RELATION WHERE table_1 = ? AND table_2 = ?`;
+    const _db = db.GetConnection();
+    let rows = _db.prepare(query).all(table_1, table_2);
+    _db.close();
+
+    let relations = [];
+    for (let row of rows) {
+        let relation = new Model();
+        relation.SetObjectFromDBRows(row);
+        relations.push(relation);
+    }
+    return relations;
+}
+
+_.SelectManyByRelationType = (relation_type) => {
+    const query = `SELECT * FROM RELATION WHERE relation_type = ?`;
+    const _db = db.GetConnection();
+    let rows = _db.prepare(query).all(relation_type);
+    _db.close();
+
+    let relations = [];
+    for (let row of rows) {
         let relation = new Model();
         relation.SetObjectFromDBRows(row);
         relations.push(relation);
