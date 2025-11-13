@@ -1,5 +1,4 @@
-const { DeleteFile } = require('../logic/io');
-const { DATABASE_FILE_PATH, ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../logic/constants')
+const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../logic/constants')
 const { PORT } = require('../logic/env')
 const URL = `http://localhost:${PORT}`;
 

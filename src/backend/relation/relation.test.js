@@ -2,6 +2,10 @@ const { DeleteFile } = require('../logic/io');
 const { DATABASE_FILE_PATH } = require('../logic/constants')
 const _db = require('../logic/db');
 
+const { PORT } = require('../logic/env')
+const URL = `http://localhost:${PORT}`;
+const axios = require('axios');
+
 const Model = require('./model')
 const controller_db = require('./controller_db')
 const controller_logic = require('./controller_logic')
@@ -93,5 +97,42 @@ describe('Controller DB Tests', () => {
             // Should only have one relation left (the first inserted).
             expect(res.length).toBe(1);
         });
+    });
+});
+
+describe('HTTP API Tests', () => {
+    describe('POST - /api/relation/', () => {
+        it('Create a new relation', async () => {
+            const res = await axios.post(`${URL}/api/relation/`, {
+                id_1: 10,
+                id_2: 20,
+                table_1: 'products',
+                table_2: 'categories',
+                relation_type: 'many-to-many'
+            });
+            expect(res.status).toBe(200);
+            expect(res.data.status).toBe('success');
+            expect(res.data.data).toHaveProperty('id');
+            expect(res.data.data.id_1).toBe(10);
+            expect(res.data.data.id_2).toBe(20);
+            expect(res.data.data.table_1).toBe('products');
+            expect(res.data.data.table_2).toBe('categories');
+            expect(res.data.data.relation_type).toBe('many-to-many');
+        });
+    });
+    describe('GET - /api/relation/', () => {
+        
+    });
+    describe('GET - /api/relation/:id/', () => {
+
+    });
+    describe('POST - /api/relation/get/:filter/', () => {
+
+    });
+    describe('PUT - /api/relation/:id/', () => {
+
+    });
+    describe('DELETE - /api/relation/:id/', () => {
+
     });
 });

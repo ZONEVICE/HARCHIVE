@@ -7,6 +7,7 @@ _.RelationTypes = [
 ]
 
 _.Tables = [
+    'WILDCARD',
     'RELATION',
     'USER',
     'SETTINGS',

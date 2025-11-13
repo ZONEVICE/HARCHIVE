@@ -15,6 +15,26 @@ module.exports = app => {
             : res.status(400).json(response);
     });
     /**
+     * Create new relation.
+     * @param {string} req.body.id_1
+     * @param {string} req.body.id_2
+     * @param {string} req.body.table_1
+     * @param {string} req.body.table_2
+     * @param {string} req.body.relation_type
+     */
+    app.post('/api/relation/', async (req, res) => {
+        const response = controller_logic.CreateRelation(
+            req.body.id_1,
+            req.body.id_2,
+            req.body.table_1,
+            req.body.table_2,
+            req.body.relation_type
+        );
+        response.status === 'success'
+            ? res.status(201).json(response)
+            : res.status(400).json(response);
+    });
+    /**
      * Get relations by filter.
      * @param {String} req.params.filter - Filter to apply based on the allowed options in types.APIGetFilters.
      * @bodyparam {Number} [id_1]
