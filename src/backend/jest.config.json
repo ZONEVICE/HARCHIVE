@@ -1,0 +1,8 @@
+{
+  "bail": false,
+  "verbose": true,
+  "testMatch": [
+    "**/*.test.js"
+  ],
+  "maxWorkers": 1
+}

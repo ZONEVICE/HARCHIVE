@@ -17,7 +17,7 @@ const validations = require('./validations')
 _.CreateRelation = (id_1, id_2, table_1, table_2, relation_type) => {
     // Validations.
     const validation = validations.ValidateCreateRelation(id_1, id_2, table_1, table_2, relation_type);
-    if (validation.status === 'failed') {
+    if (validation.status === 'error') {
         return { status: validation.status, description: validation.description, data: null };
     }
 
@@ -35,7 +35,7 @@ _.CreateRelation = (id_1, id_2, table_1, table_2, relation_type) => {
 
     // Returning result.
     if (res === false)
-        return { status: 'failed', description: 'failed to create relation in the database', data: null };
+        return { status: 'error', description: 'failed to create relation in the database', data: null };
     return { status: 'success', description: 'relation created successfully', data: relation };
 }
 
@@ -52,7 +52,7 @@ _.CreateRelation = (id_1, id_2, table_1, table_2, relation_type) => {
 _.UpdateRelation = (id, id_1, id_2, table_1, table_2, relation_type) => {
     // Validations.
     const validation = validations.ValidateEditRelation(id, id_1, id_2, table_1, table_2, relation_type);
-    if (validation.status === 'failed') {
+    if (validation.status === 'error') {
         return { status: validation.status, description: validation.description, data: null };
     }
 
@@ -71,7 +71,7 @@ _.UpdateRelation = (id, id_1, id_2, table_1, table_2, relation_type) => {
 
     // Returning result.
     if (res === false)
-        return { status: 'failed', description: 'failed to update relation in the database', data: null };
+        return { status: 'error', description: 'failed to update relation in the database', data: null };
     return { status: 'success', description: 'relation updated successfully', data: updatedRelation };
 }
 
@@ -82,47 +82,47 @@ _.GetAllRelations = () => {
 
 _.GetRelationById = id => {
     const validation_id = validations.ValidateIdProperty(id);
-    if (validation_id && validation_id.status === 'failed')
+    if (validation_id && validation_id.status === 'error')
         return { status: validation_id.status, description: validation_id.description, data: null };
 
     const relation = controller_db.SelectOneById(id);
     if (relation) return { status: 'success', description: 'relation found', data: relation };
 
-    return { status: 'failed', description: 'no relation found with the specified id', data: null };
+    return { status: 'error', description: 'no relation found with the specified id', data: null };
 }
 
 _.GetManyById1 = id_1 => {
     const validation_id1 = validations.ValidateIdProperty(id_1);
-    if (validation_id1 && validation_id1.status === 'failed')
+    if (validation_id1 && validation_id1.status === 'error')
         return { status: validation_id1.status, description: validation_id1.description, data: null };
 
     const relations = controller_db.SelectManyId1(id_1);
     if (relations.length > 0)
         return { status: 'success', description: 'relations found', data: relations };
 
-    return { status: 'failed', description: 'no relations found with the specified id_1', data: null };
+    return { status: 'error', description: 'no relations found with the specified id_1', data: null };
 }
 
 _.GetById1NId2 = (id_1, id_2) => {
     const validation_id_1 = validations.ValidateIdProperty(id_1);
-    if (validation_id_1 && validation_id_1.status === 'failed') {
+    if (validation_id_1 && validation_id_1.status === 'error') {
         return { status: validation_id_1.status, description: validation_id_1.description, data: null };
     }
 
     const validation_id_2 = validations.ValidateIdProperty(id_2);
-    if (validation_id_2 && validation_id_2.status === 'failed') {
+    if (validation_id_2 && validation_id_2.status === 'error') {
         return { status: validation_id_2.status, description: validation_id_2.description, data: null };
     }
 
     const relation = controller_db.SelectOneById1NId2(id_1, id_2);
     if (relation) return { status: 'success', description: 'relation found', data: relation };
 
-    return { status: 'failed', description: 'no relation found with the specified id_1 and id_2', data: null };
+    return { status: 'error', description: 'no relation found with the specified id_1 and id_2', data: null };
 }
 
 _.GetManyByTable1 = table_1 => {
     const validation_table = validations.ValidateTableProperty(table_1);
-    if (validation_table && validation_table.status === 'failed') {
+    if (validation_table && validation_table.status === 'error') {
         return { status: validation_table.status, description: validation_table.description, data: null };
     }
 
@@ -131,12 +131,12 @@ _.GetManyByTable1 = table_1 => {
     if (allRelations.length > 0)
         return { status: 'success', description: 'relations found', data: allRelations };
 
-    return { status: 'failed', description: 'no relation found for the specified table_1', data: null };
+    return { status: 'error', description: 'no relation found for the specified table_1', data: null };
 }
 
 _.GetByTable1NTable2 = (table_1, table_2) => {
     const validation_tables = validations.ValidateTable1NTable2(table_1, table_2);
-    if (validation_tables && validation_tables.status === 'failed') {
+    if (validation_tables && validation_tables.status === 'error') {
         return { status: validation_tables.status, description: validation_tables.description, data: null };
     }
 
@@ -145,12 +145,12 @@ _.GetByTable1NTable2 = (table_1, table_2) => {
     if (allRelations.length > 0)
         return { status: 'success', description: 'relations found', data: allRelations };
 
-    return { status: 'failed', description: 'no relation found between the specified tables', data: null };
+    return { status: 'error', description: 'no relation found between the specified tables', data: null };
 }
 
 _.GetManyByRelationType = (relation_type) => {
     const validation_relation_type = validations.ValidateRelationType(relation_type);
-    if (validation_relation_type && validation_relation_type.status === 'failed') {
+    if (validation_relation_type && validation_relation_type.status === 'error') {
         return { status: validation_relation_type.status, description: validation_relation_type.description, data: null };
     }
 
@@ -159,18 +159,18 @@ _.GetManyByRelationType = (relation_type) => {
     if (allRelations.length > 0)
         return { status: 'success', description: 'relations found', data: allRelations };
 
-    return { status: 'failed', description: 'no relation found for the specified relation type', data: null };
+    return { status: 'error', description: 'no relation found for the specified relation type', data: null };
 }
 
 _.DeleteRelationById = (id) => {
     const validation_id = validations.ValidateIdProperty(id);
-    if (validation_id && validation_id.status === 'failed') {
+    if (validation_id && validation_id.status === 'error') {
         return { status: validation_id.status, description: validation_id.description, data: null };
     }
 
     const res = controller_db.DeleteRelation(id);
     if (res === false)
-        return { status: 'failed', description: 'failed to delete relation from the database', data: null };
+        return { status: 'success', description: 'relation not found or already deleted', data: null };
     return { status: 'success', description: 'relation deleted successfully', data: null };
 }
 
