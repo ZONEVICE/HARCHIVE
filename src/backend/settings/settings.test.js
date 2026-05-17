@@ -1,11 +1,13 @@
 const { DeleteFile } = require('../logic/io');
-const { DATABASE_FILE_PATH } = require('../logic/constants')
+const { DATABASE_FILE_PATH } = require('../logic/constants');
+const { PORT } = require('../logic/env');
 const _db = require('../logic/db');
+const URL = `http://localhost:${PORT}`;
+
+const axios = require('axios');
 
 const settings_controller_db = require('./controller_db');
 const settings_model = require('./model');
-
-// https://jestjs.io/docs/expect
 
 describe('Settings Tests', () => {
     it('DROP and CREATE table for testing', async () => {
@@ -56,6 +58,51 @@ describe('Settings Tests', () => {
             expect(settings_data.allow_downloads).toBe(0);
             expect(settings_data.allow_file_system_browser).toBe(0);
             expect(settings_data.register_logs).toBe(0);
+        });
+    });
+    describe('API GET > /api/settings/', () => {
+        it('Returns settings successfully', async () => {
+            const res = await axios.get(`${URL}/api/settings/`);
+            expect(res.data.status).toBe('success');
+            expect(res.data.description).toBe('settings retrieved');
+            expect(typeof res.data.data).toBe('object');
+            expect(res.data.data).toHaveProperty('allow_downloads');
+            expect(res.data.data).toHaveProperty('allow_file_system_browser');
+            expect(res.data.data).toHaveProperty('register_logs');
+        });
+    });
+    describe('API PUT > /api/settings/', () => {
+        it('Saves settings successfully', async () => {
+            const res = await axios.put(`${URL}/api/settings/`, {
+                allow_downloads: 1,
+                allow_file_system_browser: 1,
+                register_logs: 1,
+            });
+            expect(res.data.status).toBe('success');
+            expect(res.data.description).toBe('settings saved');
+        });
+        it('API / PUT /api/settings/ > Fails when a field is missing', async () => {
+            try {
+                await axios.put(`${URL}/api/settings/`, {
+                    allow_file_system_browser: 1,
+                    register_logs: 1,
+                });
+            } catch (error) {
+                expect(error.response.data.status).toBe('failed');
+                expect(error.response.data.description).toBe('allow_downloads is required');
+            }
+        });
+        it('API / PUT /api/settings/ > Fails when a field has the wrong type', async () => {
+            try {
+                await axios.put(`${URL}/api/settings/`, {
+                    allow_downloads: 'yes',
+                    allow_file_system_browser: 1,
+                    register_logs: 1,
+                });
+            } catch (error) {
+                expect(error.response.data.status).toBe('failed');
+                expect(error.response.data.description).toBe('allow_downloads must be a number');
+            }
         });
     });
 });

@@ -100,7 +100,7 @@ describe('User Tests', () => {
             expect(loginRes.data.status).toBe('success');
             expect(loginRes.data.description).toBe('login successful');
         });
-        it('Change password fails with invalid credentials', async () => {
+        it('API / Change password fails with invalid credentials', async () => {
             try {
                 const res = await axios.post(`${URL}/api/user/change_password/`, {
                     old_password: 'wrongpassword',
@@ -111,7 +111,7 @@ describe('User Tests', () => {
                 expect(error.response.data.description).toBe('invalid credentials');
             }
         });
-         it('Additional > Revert password to default password', async () => {
+         it('API / Additional > Revert password to default password', async () => {
             try {
                 const res = await axios.post(`${URL}/api/user/change_password/`, {
                     old_password: 'finalpassword',

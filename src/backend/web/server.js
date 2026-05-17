@@ -1,6 +1,5 @@
 const express = require('express'), app = express()
 const cors = require('cors')
-
 const path = require('path')
 
 // -------------------------------------------------------------------------------
@@ -11,11 +10,12 @@ app.use(express.static(path.join(__dirname, 'public')))    // Public static file
 app.use(express.json())                                    // Server understands JSON.
 app.use(cors({}))                                          // All sources allowed.
 
-// ----------------
+// -------------------------------------------------------------------------------
 // Routes.
-// ----------------
+// -------------------------------------------------------------------------------
 require('./api/index/routes')(app)
 require('../user/routes')(app)
 require('../relation/routes')(app)
+require('../settings/routes')(app)
 
 module.exports = app
