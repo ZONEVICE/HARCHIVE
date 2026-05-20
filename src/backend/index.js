@@ -1,4 +1,4 @@
-const db = require('./logic/db')
+const db = require('./core/db')
 
 // --------------------------------------------------------------------------------
 // Creates data directory and database if not exist.
@@ -8,9 +8,8 @@ db.CreateDatabaseFile()
 // --------------------------------------------------------------------------------
 // Processes database tables and default data if needed.
 // --------------------------------------------------------------------------------
-const settings_controller = require('./settings/controller_db');
-settings_controller.CreateTable();
-settings_controller.CreateDefaultRecord();
+const metadata_controller = require('./metadata/repository');
+metadata_controller.createTable();
 
 const user_controller = require('./user/controller_db');
 user_controller.CreateTable();
@@ -20,6 +19,6 @@ user_controller.CreateAdminUser();
 // Starts web server
 // --------------------------------------------------------------------------------
 const app = require('./web/server');
-const { PORT } = require('./logic/env');
+const { PORT } = require('./core/env');
 
-app.listen(PORT, () => { console.log(`Harchive backend listening on port: ${PORT}.`); });
+app.listen(PORT, () => { console.log(`HARCHIVE backend listening on port: ${PORT}.`); });
