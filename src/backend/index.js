@@ -11,6 +11,9 @@ db.CreateDatabaseFile()
 const metadata_controller = require('./metadata/repository');
 metadata_controller.createTable();
 
+const file_repository = require('./file/repository');
+file_repository.createTable();
+
 const user_controller = require('./user/controller_db');
 user_controller.CreateTable();
 user_controller.CreateAdminUser();

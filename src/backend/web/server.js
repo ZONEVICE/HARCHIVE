@@ -17,5 +17,6 @@ require('./api/index/routes')(app)
 require('../user/routes')(app)
 require('../relation/routes')(app)
 require('../metadata/routes')(app)
+require('../file/routes')(app)
 
 module.exports = app
