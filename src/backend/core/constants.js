@@ -5,4 +5,5 @@ module.exports = {
     DATABASE_FILE_PATH: join(__dirname, '../data/harchive.db'),
     ADMIN_USERNAME: 'VICE',
     ADMIN_DEFAULT_PASSWORD: 'changeme',
+    SYSTEM_ENTITIES: ['directory', 'file', 'metadata', 'profile', 'relation', 'tag', 'user']
 }

@@ -14,9 +14,12 @@ metadata_controller.createTable();
 const file_repository = require('./file/repository');
 file_repository.createTable();
 
-const user_controller = require('./user/controller_db');
-user_controller.CreateTable();
-user_controller.CreateAdminUser();
+const user_repository = require('./user/repository');
+user_repository.CreateTable();
+user_repository.CreateAdminUser();
+
+const relation_repository = require('./relation/repository');
+relation_repository.createTable();
 
 // --------------------------------------------------------------------------------
 // Starts web server

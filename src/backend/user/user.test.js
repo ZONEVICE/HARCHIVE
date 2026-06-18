@@ -1,21 +1,21 @@
-const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../logic/constants')
-const { PORT } = require('../logic/env')
+const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../core/constants')
+const { PORT } = require('../core/env')
 const URL = `http://localhost:${PORT}`;
 
-const _db = require('../logic/db');
+const _db = require('../core/db');
 const axios = require('axios');
 
-const user_controller_db = require('./controller_db');
+const user_repository = require('./repository');
 const user_model = require('./model');
 
 describe('User Tests', () => {
     it('DROP and CREATE table for testing', async () => {
-        await user_controller_db.DropTable();
-        await user_controller_db.CreateTable();
+        await user_repository.DropTable();
+        await user_repository.CreateTable();
     });
     describe('CREATE TABLE', () => {
         it('Should create USER table', () => {
-            user_controller_db.CreateTable();
+            user_repository.CreateTable();
             const __db = _db.GetConnection();
             const res = __db.prepare('SELECT * FROM USER').all();
             __db.close();
@@ -24,17 +24,17 @@ describe('User Tests', () => {
     });
     describe('Create Admin User', () => {
         it('Should create an admin user', () => {
-            user_controller_db.CreateTable();
-            user_controller_db.CreateAdminUser();
-            const user = user_controller_db.LoadUserById('1');
+            user_repository.CreateTable();
+            user_repository.CreateAdminUser();
+            const user = user_repository.LoadUserById('1');
             expect(user).not.toBeNull();
             expect(user.username).toBe(ADMIN_USERNAME);
             expect(user.password).toBe('changeme');
         });
         it('Not duplicated', () => {
-            user_controller_db.CreateTable();
-            user_controller_db.CreateAdminUser();
-            user_controller_db.CreateAdminUser();
+            user_repository.CreateTable();
+            user_repository.CreateAdminUser();
+            user_repository.CreateAdminUser();
             const dbConn = _db.GetConnection();
             const res = dbConn.prepare(`SELECT * FROM USER WHERE username = '${ADMIN_USERNAME}'`).all();
             dbConn.close();
@@ -43,25 +43,25 @@ describe('User Tests', () => {
     });
     describe('LoadUserById', () => {
         it('Should load user by id', () => {
-            user_controller_db.CreateTable();
-            user_controller_db.CreateAdminUser();
-            const user = user_controller_db.LoadUserById('1');
+            user_repository.CreateTable();
+            user_repository.CreateAdminUser();
+            const user = user_repository.LoadUserById('1');
             expect(user).not.toBeNull();
             expect(user.id).toBe('1');
             expect(user.username).toBe(ADMIN_USERNAME);
         });
         it('Not found', () => {
-            user_controller_db.CreateTable();
-            const user = user_controller_db.LoadUserById('999');
+            user_repository.CreateTable();
+            const user = user_repository.LoadUserById('999');
             expect(user).toBeNull();
         });
     });
     describe('SetPassword', () => {
         it('Should set user password correctly', () => {
-            user_controller_db.CreateTable();
-            user_controller_db.CreateAdminUser();
-            user_controller_db.SetPassword('1', 'newpassword');
-            const user = user_controller_db.LoadUserById('1');
+            user_repository.CreateTable();
+            user_repository.CreateAdminUser();
+            user_repository.SetPassword('1', 'newpassword');
+            const user = user_repository.LoadUserById('1');
             expect(user.password).toBe('newpassword');
         });
     });

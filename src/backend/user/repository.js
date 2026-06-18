@@ -1,8 +1,8 @@
 const _ = {};
 
-const db = require('../logic/db');
+const db = require('../core/db');
 const Model = require('./model');
-const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../logic/constants');
+const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../core/constants');
 
 _.CreateTable = () => {
     const query = `CREATE TABLE IF NOT EXISTS USER (
