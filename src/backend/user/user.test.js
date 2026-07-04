@@ -14,10 +14,10 @@ describe('User Tests', () => {
         await user_repository.CreateTable();
     });
     describe('CREATE TABLE', () => {
-        it('Should create USER table', () => {
+        it('Should create user table', () => {
             user_repository.CreateTable();
             const __db = _db.GetConnection();
-            const res = __db.prepare('SELECT * FROM USER').all();
+            const res = __db.prepare('SELECT * FROM user').all();
             __db.close();
             expect(Array.isArray(res)).toBe(true);
         });
@@ -26,8 +26,9 @@ describe('User Tests', () => {
         it('Should create an admin user', () => {
             user_repository.CreateTable();
             user_repository.CreateAdminUser();
-            const user = user_repository.LoadUserById('1');
+            const user = user_repository.LoadAdminUser();
             expect(user).not.toBeNull();
+            expect(typeof user.id).toBe('string');
             expect(user.username).toBe(ADMIN_USERNAME);
             expect(user.password).toBe('changeme');
         });
@@ -36,7 +37,7 @@ describe('User Tests', () => {
             user_repository.CreateAdminUser();
             user_repository.CreateAdminUser();
             const dbConn = _db.GetConnection();
-            const res = dbConn.prepare(`SELECT * FROM USER WHERE username = '${ADMIN_USERNAME}'`).all();
+            const res = dbConn.prepare(`SELECT * FROM user WHERE username = ?`).all(ADMIN_USERNAME);
             dbConn.close();
             expect(res.length).toBe(1);
         });
@@ -45,9 +46,10 @@ describe('User Tests', () => {
         it('Should load user by id', () => {
             user_repository.CreateTable();
             user_repository.CreateAdminUser();
-            const user = user_repository.LoadUserById('1');
+            const admin = user_repository.LoadAdminUser();
+            const user = user_repository.LoadUserById(admin.id);
             expect(user).not.toBeNull();
-            expect(user.id).toBe('1');
+            expect(user.id).toBe(admin.id);
             expect(user.username).toBe(ADMIN_USERNAME);
         });
         it('Not found', () => {
@@ -60,8 +62,9 @@ describe('User Tests', () => {
         it('Should set user password correctly', () => {
             user_repository.CreateTable();
             user_repository.CreateAdminUser();
-            user_repository.SetPassword('1', 'newpassword');
-            const user = user_repository.LoadUserById('1');
+            const admin = user_repository.LoadAdminUser();
+            user_repository.SetPassword(admin.id, 'newpassword');
+            const user = user_repository.LoadUserById(admin.id);
             expect(user.password).toBe('newpassword');
         });
     });

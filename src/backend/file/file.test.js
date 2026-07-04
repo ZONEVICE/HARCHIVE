@@ -86,7 +86,14 @@ describe('PUT /api/file/update/', () => {
 
 describe('DELETE /api/file/id/:id', () => {
     it('returns 200 on delete', async () => {
-        const res = await axios.delete(`${URL}/api/file/id/${created_id}`, { validateStatus: () => true })
+        // Delete a throwaway file so the SAMPLE file stays in the database after the tests.
+        const throwaway = { name: 'throwaway.tmp', hash_256_sha: 'throwaway-hash', relative_path: '/tmp/throwaway.tmp', extension: 'tmp', tags: [] }
+        await axios.post(`${URL}/api/file/`, throwaway, { validateStatus: () => true })
+
+        const list = await axios.get(`${URL}/api/file/`, { validateStatus: () => true })
+        const throwaway_id = list.data.data.find(f => f.hash_256_sha === 'throwaway-hash').id
+
+        const res = await axios.delete(`${URL}/api/file/id/${throwaway_id}`, { validateStatus: () => true })
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(res.data.description).toBe('file deleted')

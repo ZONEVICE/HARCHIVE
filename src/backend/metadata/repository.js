@@ -8,8 +8,8 @@ const _ = {}
 
 _.CREATE_TABLE = `
     CREATE TABLE IF NOT EXISTS metadata (
-        id    INTEGER PRIMARY KEY,
-        key   TEXT NOT NULL UNIQUE,
+        id    TEXT PRIMARY KEY,
+        name  TEXT NOT NULL UNIQUE,
         value TEXT NOT NULL
     );
 `
@@ -20,13 +20,13 @@ _.getAll = () => db.prepare('SELECT * FROM metadata').all()
 
 _.getById = (id) => db.prepare('SELECT * FROM metadata WHERE id = ?').get(id)
 
-_.getByKey = (key) => db.prepare('SELECT * FROM metadata WHERE key = ?').get(key)
+_.getByName = (name) => db.prepare('SELECT * FROM metadata WHERE name = ?').get(name)
 
-_.update = (metadata) => db.prepare('UPDATE metadata SET key = ?, value = ? WHERE id = ?').run(metadata.key, metadata.value, metadata.id)
+_.update = (metadata) => db.prepare('UPDATE metadata SET name = ?, value = ? WHERE id = ?').run(metadata.name, metadata.value, metadata.id)
 
-_.post = (metadata) => db.prepare('INSERT INTO metadata (id, key, value) VALUES (?, ?, ?)').run(metadata.id, metadata.key, metadata.value)
+_.post = (metadata) => db.prepare('INSERT INTO metadata (id, name, value) VALUES (?, ?, ?)').run(metadata.id, metadata.name, metadata.value)
 
-_.deleteByKey = (key) => db.prepare('DELETE FROM metadata WHERE key = ?').run(key)
+_.deleteByName = (name) => db.prepare('DELETE FROM metadata WHERE name = ?').run(name)
 
 _.deleteAll = () => db.prepare('DELETE FROM metadata').run()
 

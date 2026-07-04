@@ -1,21 +1,23 @@
+const { generateId } = require('../core/id')
+
 class Metadata {
-    #id = 0
-    #key = ''
+    #id = generateId()
+    #name = ''
     #value = ''
 
     constructor() {}
 
-    setClass(id, key, value) {
+    setClass(id, name, value) {
         this.#id = id
-        this.#key = key
+        this.#name = name
         this.#value = value
     }
 
     get id() { return this.#id }
     set id(v) { this.#id = v }
 
-    get key() { return this.#key }
-    set key(v) { this.#key = v }
+    get name() { return this.#name }
+    set name(v) { this.#name = v }
 
     get value() { return this.#value }
     set value(v) { this.#value = v }

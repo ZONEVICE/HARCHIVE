@@ -4,7 +4,7 @@ const _ = {}
 
 _.CREATE_TABLE = `
     CREATE TABLE IF NOT EXISTS relation (
-        id        INTEGER PRIMARY KEY,
+        id        TEXT PRIMARY KEY,
         id_1      INTEGER NOT NULL,
         entity_1  TEXT NOT NULL,
         id_2          INTEGER NOT NULL,

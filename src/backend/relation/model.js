@@ -1,5 +1,7 @@
+const { generateId } = require('../core/id')
+
 class Relation {
-    #id = 0
+    #id = generateId()
     #id_1 = 0
     #entity_1 = ""
     #id_2 = 0

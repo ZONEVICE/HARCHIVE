@@ -7,7 +7,7 @@ const { RELATION_TYPES } = require('./types-of-relation')
 const _ = {}
 
 _.validate = (relation) => {
-    if (!validators.isNumber(relation.id)) return false
+    if (!validators.isString(relation.id)) return false
     if (!validators.isNumber(relation.id_1)) return false
     if (!validators.isString(relation.entity_1)) return false
     if (!validators.isValidEntity(relation.entity_1)) return false
@@ -47,7 +47,7 @@ _.getAll = async (req, res) => {
 
 _.getById = async (req, res) => {
     try {
-        const data = repository.getById(Number(req.params.id))
+        const data = repository.getById(req.params.id)
         if (!data) return res.status(404).json({ status: 'failed', description: 'relation not found' })
         res.status(200).json({ status: 'success', description: 'relation retrieved', data })
     } catch (e) {
@@ -79,15 +79,12 @@ _.getByEntityId = async (req, res) => {
 _.post = async (req, res) => {
     try {
         const relation = new Relation()
-        relation.setClass(
-            req.body.id,
-            req.body.id_1,
-            req.body.entity_1,
-            req.body.id_2,
-            req.body.entity_2,
-            req.body.relation_type,
-            req.body.note
-        )
+        relation.id_1 = req.body.id_1
+        relation.entity_1 = req.body.entity_1
+        relation.id_2 = req.body.id_2
+        relation.entity_2 = req.body.entity_2
+        relation.relation_type = req.body.relation_type
+        relation.note = req.body.note ?? null
         if (!_.validate(relation)) return res.status(400).json({ status: 'warning', description: 'relation invalid' })
         repository.post(relation)
         res.status(201).json({ status: 'success', description: 'relation created' })
@@ -121,7 +118,7 @@ _.update = async (req, res) => {
 
 _.deleteById = async (req, res) => {
     try {
-        repository.deleteById(Number(req.params.id))
+        repository.deleteById(req.params.id)
         res.status(200).json({ status: 'success', description: 'relation deleted' })
     } catch (e) {
         res.status(500).json({ status: 'failed', description: 'relation deletion failed' })
