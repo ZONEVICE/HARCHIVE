@@ -9,26 +9,26 @@ _.CREATE_TABLE = `
         hash_256_sha  TEXT NOT NULL,
         relative_path TEXT NOT NULL,
         extension     TEXT NOT NULL,
-        tags          TEXT NOT NULL DEFAULT '[]'
+        deleted_at    INTEGER
     );
 `
 
-_.createTable = () => db.prepare(_.CREATE_TABLE).run()
-
-_.getAll = () => {
-    const rows = db.prepare('SELECT * FROM file').all()
-    return rows.map(r => ({ ...r, tags: JSON.parse(r.tags) }))
+_.createTable = () => {
+    db.prepare(_.CREATE_TABLE).run()
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_file_name ON file (name);').run()
 }
+
+_.getAll = () => db.prepare('SELECT * FROM file').all()
 
 _.getById = (id) => {
     const row = db.prepare('SELECT * FROM file WHERE id = ?').get(id)
     if (!row) return null
-    return { ...row, tags: JSON.parse(row.tags) }
+    return row
 }
 
-_.post = (file) => db.prepare('INSERT INTO file (id, name, hash_256_sha, relative_path, extension, tags) VALUES (?, ?, ?, ?, ?, ?)').run(file.id, file.name, file.hash_256_sha, file.relative_path, file.extension, JSON.stringify(file.tags))
+_.post = (file) => db.prepare('INSERT INTO file (id, name, hash_256_sha, relative_path, extension, deleted_at) VALUES (?, ?, ?, ?, ?, ?)').run(file.id, file.name, file.hash_256_sha, file.relative_path, file.extension, file.deleted_at)
 
-_.update = (file) => db.prepare('UPDATE file SET name = ?, hash_256_sha = ?, relative_path = ?, extension = ?, tags = ? WHERE id = ?').run(file.name, file.hash_256_sha, file.relative_path, file.extension, JSON.stringify(file.tags), file.id)
+_.update = (file) => db.prepare('UPDATE file SET name = ?, hash_256_sha = ?, relative_path = ?, extension = ?, deleted_at = ? WHERE id = ?').run(file.name, file.hash_256_sha, file.relative_path, file.extension, file.deleted_at, file.id)
 
 _.deleteById = (id) => db.prepare('DELETE FROM file WHERE id = ?').run(id)
 

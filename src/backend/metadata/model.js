@@ -1,16 +1,18 @@
-const { generateId } = require('../core/id')
+const { generateUUIDv4 } = require('../core/id')
 
 class Metadata {
-    #id = generateId()
+    #id = generateUUIDv4()
     #name = ''
     #value = ''
+    #deleted_at = null
 
     constructor() {}
 
-    setClass(id, name, value) {
+    setClass(id, name, value, deleted_at) {
         this.#id = id
         this.#name = name
         this.#value = value
+        this.#deleted_at = deleted_at ?? null
     }
 
     get id() { return this.#id }
@@ -21,6 +23,9 @@ class Metadata {
 
     get value() { return this.#value }
     set value(v) { this.#value = v }
+
+    get deleted_at() { return this.#deleted_at }
+    set deleted_at(v) { this.#deleted_at = v }
 }
 
 module.exports = Metadata

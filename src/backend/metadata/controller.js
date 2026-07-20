@@ -1,6 +1,7 @@
 const Metadata = require('./model')
 const validators = require('./validators')
 const repository = require('./repository')
+const { getSystemTime } = require('../core/time')
 
 const _ = {}
 
@@ -8,6 +9,7 @@ _.validate = (metadata) => {
     if (!validators.isString(metadata.id)) return false
     if (!validators.isString(metadata.name)) return false
     if (!validators.isString(metadata.value)) return false
+    if (!validators.isNumberOrNull(metadata.deleted_at)) return false
     return true
 }
 
@@ -42,8 +44,19 @@ _.getByName = async (req, res) => {
 
 _.update = async (req, res) => {
     try {
+        // The client sends deleted_at as a boolean: true marks the metadata as deleted with
+        //  the current system time, false clears the mark. When the field is absent the value
+        //  already stored is kept untouched.
+        const current = repository.getById(req.body.id)
+        let deleted_at = current ? current.deleted_at : null
+
+        if (req.body.deleted_at !== undefined) {
+            if (!validators.isBoolean(req.body.deleted_at)) return res.status(400).json({ status: 'warning', description: 'metadata invalid' })
+            deleted_at = req.body.deleted_at ? getSystemTime() : null
+        }
+
         const metadata = new Metadata()
-        metadata.setClass(req.body.id, req.body.name, req.body.value)
+        metadata.setClass(req.body.id, req.body.name, req.body.value, deleted_at)
         if (!_.validate(metadata)) return res.status(400).json({ status: 'warning', description: 'metadata invalid' })
         repository.update(metadata)
         res.status(200).json({ status: 'success', description: 'metadata updated' })

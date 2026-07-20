@@ -8,18 +8,18 @@ const { RELATION_TYPES } = require('./types-of-relation')
 const relation_repository = require('./repository')
 
 const SAMPLE = {
-    id_1: 100,
+    id_1: '100',
     entity_1: 'file',
-    id_2: 200,
+    id_2: '200',
     entity_2: 'metadata',
     relation_type: 'linked',
     note: 'File 100 linked to metadata 200'
 }
 
 const SECOND_SAMPLE = {
-    id_1: 100,
+    id_1: '100',
     entity_1: 'directory',
-    id_2: 300,
+    id_2: '300',
     entity_2: 'directory',
     relation_type: 'contains',
     note: 'Directory 100 contains directory 300'
@@ -60,8 +60,8 @@ describe('GET /api/relation/types/', () => {
 })
 
 describe('POST /api/relation/', () => {
-    it('returns 400 warning on invalid body (id_1 not a number)', async () => {
-        const res = await axios.post(`${URL}/api/relation/`, { ...SAMPLE, id_1: 'x' }, { validateStatus: () => true })
+    it('returns 400 warning on invalid body (id_1 not a string)', async () => {
+        const res = await axios.post(`${URL}/api/relation/`, { ...SAMPLE, id_1: 123 }, { validateStatus: () => true })
         expect(res.status).toBe(400)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('relation invalid')
@@ -186,8 +186,8 @@ describe('GET /api/relation/entity_id/:id', () => {
 })
 
 describe('PUT /api/relation/update/', () => {
-    it('returns 400 warning on invalid body (id_1 not a number)', async () => {
-        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: sample_id, id_1: 'x' }, { validateStatus: () => true })
+    it('returns 400 warning on invalid body (id_1 not a string)', async () => {
+        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: sample_id, id_1: 123 }, { validateStatus: () => true })
         expect(res.status).toBe(400)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('relation invalid')
@@ -209,6 +209,128 @@ describe('PUT /api/relation/update/', () => {
         const get = await axios.get(`${URL}/api/relation/id/${sample_id}`, { validateStatus: () => true })
         expect(get.data.data.note).toBe('Updated note')
         expect(get.data.data.relation_type).toBe('sibling')
+    })
+})
+
+describe('PUT /api/relation/update/ deleted_at', () => {
+    const DELETED_SAMPLE = {
+        id_1: '900',
+        entity_1: 'file',
+        id_2: '901',
+        entity_2: 'tag',
+        relation_type: 'tagged',
+        note: 'trash-relation'
+    }
+
+    let target_id = ''
+
+    // Builds the full update body the endpoint expects, adding the deleted_at field only
+    //  when the test explicitly passes one.
+    const buildBody = (deleted_at) => {
+        const body = { ...DELETED_SAMPLE, id: target_id }
+        if (deleted_at !== undefined) body.deleted_at = deleted_at
+        return body
+    }
+
+    const readRelation = async () => {
+        const res = await axios.get(`${URL}/api/relation/id/${target_id}`, { validateStatus: () => true })
+        return res.data.data
+    }
+
+    beforeAll(async () => {
+        await axios.post(`${URL}/api/relation/`, DELETED_SAMPLE, { validateStatus: () => true })
+        target_id = await findRelationIdByNote(DELETED_SAMPLE.note)
+    })
+
+    it('stores null on a newly created relation', async () => {
+        const relation = await readRelation()
+        expect(relation.deleted_at).toBeNull()
+    })
+
+    it('stores the Unix Epoch in seconds when true is sent', async () => {
+        const before = Math.floor(Date.now() / 1000)
+        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(true), { validateStatus: () => true })
+        expect(res.status).toBe(200)
+
+        const relation = await readRelation()
+        expect(typeof relation.deleted_at).toBe('number')
+        expect(relation.deleted_at).toBeGreaterThanOrEqual(before)
+        expect(relation.deleted_at).toBeLessThanOrEqual(Math.floor(Date.now() / 1000))
+    })
+
+    it('returns deleted relations in the full listing', async () => {
+        const res = await axios.get(`${URL}/api/relation/`, { validateStatus: () => true })
+        const relation = res.data.data.find(r => r.id === target_id)
+        expect(relation).toBeDefined()
+        expect(typeof relation.deleted_at).toBe('number')
+    })
+
+    it('returns a deleted relation when asked by id', async () => {
+        const res = await axios.get(`${URL}/api/relation/id/${target_id}`, { validateStatus: () => true })
+        expect(res.status).toBe(200)
+        expect(res.data.status).toBe('success')
+        expect(typeof res.data.data.deleted_at).toBe('number')
+    })
+
+    it('returns a deleted relation when querying by entity', async () => {
+        const res = await axios.get(`${URL}/api/relation/entity/${DELETED_SAMPLE.entity_1}`, { validateStatus: () => true })
+        const relation = res.data.data.find(r => r.id === target_id)
+        expect(relation).toBeDefined()
+        expect(typeof relation.deleted_at).toBe('number')
+    })
+
+    it('returns a deleted relation when querying by entity id', async () => {
+        const res = await axios.get(`${URL}/api/relation/entity_id/${DELETED_SAMPLE.id_1}`, { validateStatus: () => true })
+        const relation = res.data.data.find(r => r.id === target_id)
+        expect(relation).toBeDefined()
+        expect(typeof relation.deleted_at).toBe('number')
+    })
+
+    it('keeps the stored value when deleted_at is not sent', async () => {
+        const before = await readRelation()
+        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(undefined), { validateStatus: () => true })
+        expect(res.status).toBe(200)
+
+        const after = await readRelation()
+        expect(after.deleted_at).toBe(before.deleted_at)
+    })
+
+    it('sets a newer Unix Epoch when true is sent on an already deleted relation', async () => {
+        const before = await readRelation()
+        expect(typeof before.deleted_at).toBe('number')
+
+        // getSystemTime() works in whole seconds, so the clock must advance for the new
+        //  value to be distinguishable from the previous one.
+        await new Promise(resolve => setTimeout(resolve, 1100))
+
+        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(true), { validateStatus: () => true })
+        expect(res.status).toBe(200)
+
+        const after = await readRelation()
+        expect(after.deleted_at).toBeGreaterThan(before.deleted_at)
+    })
+
+    it('clears the value back to null when false is sent', async () => {
+        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(false), { validateStatus: () => true })
+        expect(res.status).toBe(200)
+
+        const relation = await readRelation()
+        expect(relation.deleted_at).toBeNull()
+    })
+
+    it('stays null when false is sent on a relation that was not deleted', async () => {
+        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(false), { validateStatus: () => true })
+        expect(res.status).toBe(200)
+
+        const relation = await readRelation()
+        expect(relation.deleted_at).toBeNull()
+    })
+
+    it('returns 400 warning when deleted_at is not a boolean', async () => {
+        const res = await axios.put(`${URL}/api/relation/update/`, buildBody('yes'), { validateStatus: () => true })
+        expect(res.status).toBe(400)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('relation invalid')
     })
 })
 

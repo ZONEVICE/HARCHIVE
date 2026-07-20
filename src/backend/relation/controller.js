@@ -3,20 +3,22 @@ const validators = require('./validators')
 const repository = require('./repository')
 const { SYSTEM_ENTITIES } = require('../core/constants')
 const { RELATION_TYPES } = require('./types-of-relation')
+const { getSystemTime } = require('../core/time')
 
 const _ = {}
 
 _.validate = (relation) => {
     if (!validators.isString(relation.id)) return false
-    if (!validators.isNumber(relation.id_1)) return false
+    if (!validators.isString(relation.id_1)) return false
     if (!validators.isString(relation.entity_1)) return false
     if (!validators.isValidEntity(relation.entity_1)) return false
-    if (!validators.isNumber(relation.id_2)) return false
+    if (!validators.isString(relation.id_2)) return false
     if (!validators.isString(relation.entity_2)) return false
     if (!validators.isValidEntity(relation.entity_2)) return false
     if (!validators.isString(relation.relation_type)) return false
     if (!validators.isValidRelationType(relation.relation_type)) return false
     if (!validators.isNullableString(relation.note)) return false
+    if (!validators.isNumberOrNull(relation.deleted_at)) return false
     return true
 }
 
@@ -69,7 +71,7 @@ _.getByEntity = async (req, res) => {
 
 _.getByEntityId = async (req, res) => {
     try {
-        const data = repository.getByEntityId(Number(req.params.id))
+        const data = repository.getByEntityId(req.params.id)
         res.status(200).json({ status: 'success', description: 'relation retrieved', data })
     } catch (e) {
         res.status(500).json({ status: 'failed', description: 'relation retrieval failed' })
@@ -95,6 +97,17 @@ _.post = async (req, res) => {
 
 _.update = async (req, res) => {
     try {
+        // The client sends deleted_at as a boolean: true marks the relation as deleted with
+        //  the current system time, false clears the mark. When the field is absent the value
+        //  already stored is kept untouched.
+        const current = repository.getById(req.body.id)
+        let deleted_at = current ? current.deleted_at : null
+
+        if (req.body.deleted_at !== undefined) {
+            if (!validators.isBoolean(req.body.deleted_at)) return res.status(400).json({ status: 'warning', description: 'relation invalid' })
+            deleted_at = req.body.deleted_at ? getSystemTime() : null
+        }
+
         const relation = new Relation()
         relation.setClass(
             req.body.id,
@@ -103,10 +116,11 @@ _.update = async (req, res) => {
             req.body.id_2,
             req.body.entity_2,
             req.body.relation_type,
-            req.body.note
+            req.body.note,
+            deleted_at
         )
         if (!_.validate(relation)) return res.status(400).json({ status: 'warning', description: 'relation invalid' })
-        if (!repository.getById(relation.id)) {
+        if (!current) {
             return res.status(404).json({ status: 'failed', description: 'relation not found' })
         }
         repository.update(relation)

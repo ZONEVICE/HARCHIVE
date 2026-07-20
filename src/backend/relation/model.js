@@ -1,17 +1,18 @@
-const { generateId } = require('../core/id')
+const { generateUUIDv4 } = require('../core/id')
 
 class Relation {
-    #id = generateId()
-    #id_1 = 0
+    #id = generateUUIDv4()
+    #id_1 = ""
     #entity_1 = ""
-    #id_2 = 0
+    #id_2 = ""
     #entity_2 = ""
     #relation_type = ""
     #note = null
+    #deleted_at = null
 
     constructor() {}
 
-    setClass(id, id_1, entity_1, id_2, entity_2, relation_type, note) {
+    setClass(id, id_1, entity_1, id_2, entity_2, relation_type, note, deleted_at) {
         this.#id = id
         this.#id_1 = id_1
         this.#entity_1 = entity_1
@@ -19,6 +20,7 @@ class Relation {
         this.#entity_2 = entity_2
         this.#relation_type = relation_type
         this.#note = note ?? null
+        this.#deleted_at = deleted_at ?? null
     }
 
     get id() { return this.#id }
@@ -41,6 +43,9 @@ class Relation {
 
     get note() { return this.#note }
     set note(v) { this.#note = v }
+
+    get deleted_at() { return this.#deleted_at }
+    set deleted_at(v) { this.#deleted_at = v }
 }
 
 module.exports = Relation

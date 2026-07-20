@@ -89,6 +89,115 @@ describe('PUT /api/metadata/update/', () => {
     })
 })
 
+describe('PUT /api/metadata/update/ deleted_at', () => {
+    const DELETED_SAMPLE = { name: 'trash_key', value: 'trash_value' }
+
+    let target_id = ''
+
+    // Builds the full update body the endpoint expects, adding the deleted_at field only
+    //  when the test explicitly passes one.
+    const buildBody = (deleted_at) => {
+        const body = { ...DELETED_SAMPLE, id: target_id }
+        if (deleted_at !== undefined) body.deleted_at = deleted_at
+        return body
+    }
+
+    const readMetadata = async () => {
+        const res = await axios.get(`${URL}/api/metadata/id/${target_id}`, { validateStatus: () => true })
+        return res.data.data
+    }
+
+    beforeAll(async () => {
+        await axios.post(`${URL}/api/metadata/`, DELETED_SAMPLE, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/metadata/name/${DELETED_SAMPLE.name}`, { validateStatus: () => true })
+        target_id = res.data.data.id
+    })
+
+    it('stores null on newly created metadata', async () => {
+        const metadata = await readMetadata()
+        expect(metadata.deleted_at).toBeNull()
+    })
+
+    it('stores the Unix Epoch in seconds when true is sent', async () => {
+        const before = Math.floor(Date.now() / 1000)
+        const res = await axios.put(`${URL}/api/metadata/update/`, buildBody(true), { validateStatus: () => true })
+        expect(res.status).toBe(200)
+
+        const metadata = await readMetadata()
+        expect(typeof metadata.deleted_at).toBe('number')
+        expect(metadata.deleted_at).toBeGreaterThanOrEqual(before)
+        expect(metadata.deleted_at).toBeLessThanOrEqual(Math.floor(Date.now() / 1000))
+    })
+
+    it('returns deleted metadata in the full listing', async () => {
+        const res = await axios.get(`${URL}/api/metadata/`, { validateStatus: () => true })
+        const metadata = res.data.data.find(m => m.id === target_id)
+        expect(metadata).toBeDefined()
+        expect(typeof metadata.deleted_at).toBe('number')
+    })
+
+    it('returns deleted metadata when asked by id', async () => {
+        const res = await axios.get(`${URL}/api/metadata/id/${target_id}`, { validateStatus: () => true })
+        expect(res.status).toBe(200)
+        expect(res.data.status).toBe('success')
+        expect(typeof res.data.data.deleted_at).toBe('number')
+    })
+
+    it('returns deleted metadata when asked by name', async () => {
+        const res = await axios.get(`${URL}/api/metadata/name/${DELETED_SAMPLE.name}`, { validateStatus: () => true })
+        expect(res.status).toBe(200)
+        expect(res.data.status).toBe('success')
+        expect(typeof res.data.data.deleted_at).toBe('number')
+    })
+
+    it('keeps the stored value when deleted_at is not sent', async () => {
+        const before = await readMetadata()
+        const res = await axios.put(`${URL}/api/metadata/update/`, buildBody(undefined), { validateStatus: () => true })
+        expect(res.status).toBe(200)
+
+        const after = await readMetadata()
+        expect(after.deleted_at).toBe(before.deleted_at)
+    })
+
+    it('sets a newer Unix Epoch when true is sent on already deleted metadata', async () => {
+        const before = await readMetadata()
+        expect(typeof before.deleted_at).toBe('number')
+
+        // getSystemTime() works in whole seconds, so the clock must advance for the new
+        //  value to be distinguishable from the previous one.
+        await new Promise(resolve => setTimeout(resolve, 1100))
+
+        const res = await axios.put(`${URL}/api/metadata/update/`, buildBody(true), { validateStatus: () => true })
+        expect(res.status).toBe(200)
+
+        const after = await readMetadata()
+        expect(after.deleted_at).toBeGreaterThan(before.deleted_at)
+    })
+
+    it('clears the value back to null when false is sent', async () => {
+        const res = await axios.put(`${URL}/api/metadata/update/`, buildBody(false), { validateStatus: () => true })
+        expect(res.status).toBe(200)
+
+        const metadata = await readMetadata()
+        expect(metadata.deleted_at).toBeNull()
+    })
+
+    it('stays null when false is sent on metadata that was not deleted', async () => {
+        const res = await axios.put(`${URL}/api/metadata/update/`, buildBody(false), { validateStatus: () => true })
+        expect(res.status).toBe(200)
+
+        const metadata = await readMetadata()
+        expect(metadata.deleted_at).toBeNull()
+    })
+
+    it('returns 400 warning when deleted_at is not a boolean', async () => {
+        const res = await axios.put(`${URL}/api/metadata/update/`, buildBody('yes'), { validateStatus: () => true })
+        expect(res.status).toBe(400)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('metadata invalid')
+    })
+})
+
 describe('DELETE /api/metadata/name/:name', () => {
     it('returns 200 on delete', async () => {
         // Delete a throwaway record so SAMPLE stays in the database after the tests.

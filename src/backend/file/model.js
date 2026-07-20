@@ -1,20 +1,20 @@
-const { generateId } = require('../core/id')
+const { generateUUIDv4 } = require('../core/id')
 
 class File {
-    #id = generateId()
+    #id = generateUUIDv4()
     #name = ''
     #hash_256_sha = ''
     #relative_path = ''
     #extension = ''
-    #tags = []
+    #deleted_at = null
 
-    setClass(id, name, hash_256_sha, relative_path, extension, tags) {
+    setClass(id, name, hash_256_sha, relative_path, extension, deleted_at) {
         this.#id = id
         this.#name = name
         this.#hash_256_sha = hash_256_sha
         this.#relative_path = relative_path
         this.#extension = extension
-        this.#tags = tags
+        this.#deleted_at = deleted_at ?? null
     }
 
     get id() { return this.#id }
@@ -32,8 +32,8 @@ class File {
     get extension() { return this.#extension }
     set extension(v) { this.#extension = v }
 
-    get tags() { return this.#tags }
-    set tags(v) { this.#tags = v }
+    get deleted_at() { return this.#deleted_at }
+    set deleted_at(v) { this.#deleted_at = v }
 }
 
 module.exports = File

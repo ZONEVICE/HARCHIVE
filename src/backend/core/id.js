@@ -1,5 +1,5 @@
 const { randomUUID } = require('crypto')
 
-const generateId = () => randomUUID()
+const generateUUIDv4 = () => randomUUID()
 
-module.exports = { generateId }
+module.exports = { generateUUIDv4 }
