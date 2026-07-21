@@ -1,4 +1,4 @@
-const repository = require('./repository');
+const service = require('./service');
 
 const _ = {};
 
@@ -9,9 +9,7 @@ const _ = {};
 _.login = async (req, res) => {
     const { password } = req.body;
 
-    const admin_user = repository.LoadAdminUser();
-
-    if (admin_user.password === password) {
+    if (service.verifyPassword(password)) {
         res.json({ status: 'success', description: 'login successful' });
     } else {
         res.status(401).json({ status: 'warning', description: 'invalid credentials' });
@@ -26,10 +24,7 @@ _.login = async (req, res) => {
 _.changePassword = async (req, res) => {
     const { old_password, new_password } = req.body;
 
-    const admin_user = repository.LoadAdminUser();
-
-    if (admin_user.password === old_password) {
-        repository.SetPassword(admin_user.id, new_password);
+    if (service.changePassword(old_password, new_password)) {
         res.json({ status: 'success', description: 'password changed successfully' });
     } else {
         res.status(401).json({ status: 'warning', description: 'invalid credentials' });

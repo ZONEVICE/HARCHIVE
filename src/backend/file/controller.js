@@ -1,19 +1,8 @@
-const File = require('./model')
 const validators = require('./validators')
 const repository = require('./repository')
-const { getSystemTime } = require('../core/time')
+const service = require('./service')
 
 const _ = {}
-
-_.validate = (file) => {
-    if (!validators.isString(file.id)) return false
-    if (!validators.isString(file.name)) return false
-    if (!validators.isString(file.hash_256_sha)) return false
-    if (!validators.isString(file.relative_path)) return false
-    if (!validators.isString(file.extension)) return false
-    if (!validators.isNumberOrNull(file.deleted_at)) return false
-    return true
-}
 
 _.getAll = async (req, res) => {
     try {
@@ -36,12 +25,8 @@ _.getById = async (req, res) => {
 
 _.post = async (req, res) => {
     try {
-        const file = new File()
-        file.name = req.body.name
-        file.hash_256_sha = req.body.hash_256_sha
-        file.relative_path = req.body.relative_path
-        file.extension = req.body.extension
-        if (!_.validate(file)) return res.status(400).json({ status: 'warning', description: 'file invalid' })
+        if (!validators.validatePost(req.body)) return res.status(400).json({ status: 'warning', description: 'file invalid' })
+        const file = service.buildForCreate(req.body)
         repository.post(file)
         res.status(201).json({ status: 'success', description: 'file created' })
     } catch (e) {
@@ -51,20 +36,9 @@ _.post = async (req, res) => {
 
 _.update = async (req, res) => {
     try {
-        // The client sends deleted_at as a boolean: true marks the file as deleted with the
-        //  current system time, false clears the mark. When the field is absent the value
-        //  already stored is kept untouched.
+        if (!validators.validateUpdate(req.body)) return res.status(400).json({ status: 'warning', description: 'file invalid' })
         const current = repository.getById(req.body.id)
-        let deleted_at = current ? current.deleted_at : null
-
-        if (req.body.deleted_at !== undefined) {
-            if (!validators.isBoolean(req.body.deleted_at)) return res.status(400).json({ status: 'warning', description: 'file invalid' })
-            deleted_at = req.body.deleted_at ? getSystemTime() : null
-        }
-
-        const file = new File()
-        file.setClass(req.body.id, req.body.name, req.body.hash_256_sha, req.body.relative_path, req.body.extension, deleted_at)
-        if (!_.validate(file)) return res.status(400).json({ status: 'warning', description: 'file invalid' })
+        const file = service.buildForUpdate(current, req.body)
         repository.update(file)
         res.status(200).json({ status: 'success', description: 'file updated' })
     } catch (e) {

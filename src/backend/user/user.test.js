@@ -6,6 +6,7 @@ const _db = require('../core/db');
 const axios = require('axios');
 
 const user_repository = require('./repository');
+const user_service = require('./service');
 const user_model = require('./model');
 
 describe('User Tests', () => {
@@ -25,7 +26,7 @@ describe('User Tests', () => {
     describe('Create Admin User', () => {
         it('Should create an admin user', () => {
             user_repository.CreateTable();
-            user_repository.CreateAdminUser();
+            user_service.createAdminUser();
             const user = user_repository.LoadAdminUser();
             expect(user).not.toBeNull();
             expect(typeof user.id).toBe('string');
@@ -34,8 +35,8 @@ describe('User Tests', () => {
         });
         it('Not duplicated', () => {
             user_repository.CreateTable();
-            user_repository.CreateAdminUser();
-            user_repository.CreateAdminUser();
+            user_service.createAdminUser();
+            user_service.createAdminUser();
             const dbConn = _db.GetConnection();
             const res = dbConn.prepare(`SELECT * FROM user WHERE username = ?`).all(ADMIN_USERNAME);
             dbConn.close();
@@ -45,7 +46,7 @@ describe('User Tests', () => {
     describe('LoadUserById', () => {
         it('Should load user by id', () => {
             user_repository.CreateTable();
-            user_repository.CreateAdminUser();
+            user_service.createAdminUser();
             const admin = user_repository.LoadAdminUser();
             const user = user_repository.LoadUserById(admin.id);
             expect(user).not.toBeNull();
@@ -61,7 +62,7 @@ describe('User Tests', () => {
     describe('SetPassword', () => {
         it('Should set user password correctly', () => {
             user_repository.CreateTable();
-            user_repository.CreateAdminUser();
+            user_service.createAdminUser();
             const admin = user_repository.LoadAdminUser();
             user_repository.SetPassword(admin.id, 'newpassword');
             const user = user_repository.LoadUserById(admin.id);

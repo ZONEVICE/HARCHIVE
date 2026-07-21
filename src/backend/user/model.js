@@ -1,7 +1,7 @@
-const { generateId } = require('../core/id')
+const { generateUUIDv4 } = require('../core/id')
 
 module.exports = class User {
-    #id = generateId()
+    #id = generateUUIDv4()
     #username = ''
     #password = ''
 

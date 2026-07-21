@@ -2,7 +2,7 @@ const _ = {};
 
 const db = require('../core/db');
 const Model = require('./model');
-const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../core/constants');
+const { ADMIN_USERNAME } = require('../core/constants');
 
 _.CreateTable = () => {
     const query = `CREATE TABLE IF NOT EXISTS user (
@@ -22,16 +22,10 @@ _.DropTable = () => {
     _db.close();
 }
 
-_.CreateAdminUser = () => {
+_.Post = (user) => {
+    const query = `INSERT INTO user (id, username, password) VALUES (?, ?, ?)`;
     const _db = db.GetConnection();
-    let res = _db.prepare(`SELECT * FROM user WHERE username = ?`).all(ADMIN_USERNAME);
-    if (res.length === 0) {
-        const user = new Model();
-        user.username = ADMIN_USERNAME;
-        user.password = ADMIN_DEFAULT_PASSWORD;
-        _db.prepare(`INSERT INTO user (id, username, password) VALUES (?, ?, ?)`)
-            .run(user.id, user.username, user.password);
-    }
+    _db.prepare(query).run(user.id, user.username, user.password);
     _db.close();
 }
 
