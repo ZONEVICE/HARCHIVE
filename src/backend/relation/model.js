@@ -1,10 +1,9 @@
-const { generateUUIDv4 } = require('../core/id')
-
 class Relation {
-    #id = generateUUIDv4()
-    #id_1 = ""
+    // The id is assigned by the database (INTEGER PRIMARY KEY) on insert, so it starts null.
+    #id = null
+    #id_1 = null
     #entity_1 = ""
-    #id_2 = ""
+    #id_2 = null
     #entity_2 = ""
     #relation_type = ""
     #note = null

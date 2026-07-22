@@ -37,7 +37,7 @@ describe('GET /api/metadata/', () => {
         expect(res.data.status).toBe('success')
         expect(Array.isArray(res.data.data)).toBe(true)
         created_id = res.data.data[0].id
-        expect(typeof created_id).toBe('string')
+        expect(typeof created_id).toBe('number')
     })
 })
 

@@ -8,18 +8,18 @@ const { RELATION_TYPES } = require('./types-of-relation')
 const relation_repository = require('./repository')
 
 const SAMPLE = {
-    id_1: '100',
+    id_1: 100,
     entity_1: 'file',
-    id_2: '200',
+    id_2: 200,
     entity_2: 'metadata',
     relation_type: 'linked',
     note: 'File 100 linked to metadata 200'
 }
 
 const SECOND_SAMPLE = {
-    id_1: '100',
+    id_1: 100,
     entity_1: 'directory',
-    id_2: '300',
+    id_2: 300,
     entity_2: 'directory',
     relation_type: 'contains',
     note: 'Directory 100 contains directory 300'
@@ -60,8 +60,8 @@ describe('GET /api/relation/types/', () => {
 })
 
 describe('POST /api/relation/', () => {
-    it('returns 400 warning on invalid body (id_1 not a string)', async () => {
-        const res = await axios.post(`${URL}/api/relation/`, { ...SAMPLE, id_1: 123 }, { validateStatus: () => true })
+    it('returns 400 warning on invalid body (id_1 not a number)', async () => {
+        const res = await axios.post(`${URL}/api/relation/`, { ...SAMPLE, id_1: '100' }, { validateStatus: () => true })
         expect(res.status).toBe(400)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('relation invalid')
@@ -97,7 +97,7 @@ describe('POST /api/relation/', () => {
         expect(res.data.description).toBe('relation created')
 
         sample_id = await findRelationIdByNote(SAMPLE.note)
-        expect(typeof sample_id).toBe('string')
+        expect(typeof sample_id).toBe('number')
     })
 
     it('returns 201 on valid relation without note (note is nullable)', async () => {
@@ -115,7 +115,7 @@ describe('POST /api/relation/', () => {
         expect(res.data.description).toBe('relation created')
 
         second_id = await findRelationIdByNote(SECOND_SAMPLE.note)
-        expect(typeof second_id).toBe('string')
+        expect(typeof second_id).toBe('number')
     })
 })
 
@@ -186,15 +186,15 @@ describe('GET /api/relation/entity_id/:id', () => {
 })
 
 describe('PUT /api/relation/update/', () => {
-    it('returns 400 warning on invalid body (id_1 not a string)', async () => {
-        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: sample_id, id_1: 123 }, { validateStatus: () => true })
+    it('returns 400 warning on invalid body (id_1 not a number)', async () => {
+        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: sample_id, id_1: '100' }, { validateStatus: () => true })
         expect(res.status).toBe(400)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('relation invalid')
     })
 
     it('returns 404 when relation does not exist', async () => {
-        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: 'nonexistent-id' }, { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: 999999 }, { validateStatus: () => true })
         expect(res.status).toBe(404)
         expect(res.data.status).toBe('failed')
         expect(res.data.description).toBe('relation not found')
@@ -214,9 +214,9 @@ describe('PUT /api/relation/update/', () => {
 
 describe('PUT /api/relation/update/ deleted_at', () => {
     const DELETED_SAMPLE = {
-        id_1: '900',
+        id_1: 900,
         entity_1: 'file',
-        id_2: '901',
+        id_2: 901,
         entity_2: 'tag',
         relation_type: 'tagged',
         note: 'trash-relation'

@@ -29,7 +29,7 @@ describe('User Tests', () => {
             user_service.createAdminUser();
             const user = user_repository.LoadAdminUser();
             expect(user).not.toBeNull();
-            expect(typeof user.id).toBe('string');
+            expect(typeof user.id).toBe('number');
             expect(user.username).toBe(ADMIN_USERNAME);
             expect(user.password).toBe('changeme');
         });

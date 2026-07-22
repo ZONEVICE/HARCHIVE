@@ -1,7 +1,6 @@
-const { generateUUIDv4 } = require('../core/id')
-
 module.exports = class User {
-    #id = generateUUIDv4()
+    // The id is assigned by the database (INTEGER PRIMARY KEY) on insert, so it starts null.
+    #id = null
     #username = ''
     #password = ''
 

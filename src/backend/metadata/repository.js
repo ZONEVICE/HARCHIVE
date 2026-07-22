@@ -8,7 +8,7 @@ const _ = {}
 
 _.CREATE_TABLE = `
     CREATE TABLE IF NOT EXISTS metadata (
-        id    TEXT PRIMARY KEY,
+        id    INTEGER PRIMARY KEY,
         name  TEXT NOT NULL UNIQUE,
         value TEXT NOT NULL,
         deleted_at INTEGER
@@ -25,7 +25,7 @@ _.getByName = (name) => db.prepare('SELECT * FROM metadata WHERE name = ?').get(
 
 _.update = (metadata) => db.prepare('UPDATE metadata SET name = ?, value = ?, deleted_at = ? WHERE id = ?').run(metadata.name, metadata.value, metadata.deleted_at, metadata.id)
 
-_.post = (metadata) => db.prepare('INSERT INTO metadata (id, name, value, deleted_at) VALUES (?, ?, ?, ?)').run(metadata.id, metadata.name, metadata.value, metadata.deleted_at)
+_.post = (metadata) => db.prepare('INSERT INTO metadata (name, value, deleted_at) VALUES (?, ?, ?)').run(metadata.name, metadata.value, metadata.deleted_at)
 
 _.deleteByName = (name) => db.prepare('DELETE FROM metadata WHERE name = ?').run(name)
 

@@ -4,7 +4,7 @@ const _ = {}
 
 _.CREATE_TABLE = `
     CREATE TABLE IF NOT EXISTS file (
-        id            TEXT PRIMARY KEY,
+        id            INTEGER PRIMARY KEY,
         name          TEXT NOT NULL,
         hash_256_sha  TEXT NOT NULL,
         relative_path TEXT NOT NULL,
@@ -26,7 +26,7 @@ _.getById = (id) => {
     return row
 }
 
-_.post = (file) => db.prepare('INSERT INTO file (id, name, hash_256_sha, relative_path, extension, deleted_at) VALUES (?, ?, ?, ?, ?, ?)').run(file.id, file.name, file.hash_256_sha, file.relative_path, file.extension, file.deleted_at)
+_.post = (file) => db.prepare('INSERT INTO file (name, hash_256_sha, relative_path, extension, deleted_at) VALUES (?, ?, ?, ?, ?)').run(file.name, file.hash_256_sha, file.relative_path, file.extension, file.deleted_at)
 
 _.update = (file) => db.prepare('UPDATE file SET name = ?, hash_256_sha = ?, relative_path = ?, extension = ?, deleted_at = ? WHERE id = ?').run(file.name, file.hash_256_sha, file.relative_path, file.extension, file.deleted_at, file.id)
 

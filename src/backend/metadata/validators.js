@@ -16,7 +16,7 @@ _.validatePost = (body) => {
 // Validates the body of an update request. deleted_at is the client flag: a boolean, or
 //  null/absent to leave the stored value untouched.
 _.validateUpdate = (body) => {
-    if (!_.isString(body.id)) return false
+    if (!_.isNumber(body.id)) return false
     if (!_.isString(body.name)) return false
     if (!_.isString(body.value)) return false
     if (body.deleted_at !== undefined && body.deleted_at !== null && !_.isBoolean(body.deleted_at)) return false

@@ -1,6 +1,7 @@
 const _ = {}
 
 _.isString = v => typeof v === 'string'
+_.isNumber = v => typeof v === 'number'
 _.isBoolean = v => typeof v === 'boolean'
 _.isNumberOrNull = v => v === null || typeof v === 'number'
 
@@ -17,7 +18,7 @@ _.validatePost = (body) => {
 // Validates the body of an update request. deleted_at is the client flag: a boolean, or
 //  null/absent to leave the stored value untouched.
 _.validateUpdate = (body) => {
-    if (!_.isString(body.id)) return false
+    if (!_.isNumber(body.id)) return false
     if (!_.isString(body.name)) return false
     if (!_.isString(body.hash_256_sha)) return false
     if (!_.isString(body.relative_path)) return false

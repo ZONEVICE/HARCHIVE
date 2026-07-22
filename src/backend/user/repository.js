@@ -6,7 +6,7 @@ const { ADMIN_USERNAME } = require('../core/constants');
 
 _.CreateTable = () => {
     const query = `CREATE TABLE IF NOT EXISTS user (
-        id TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY,
         username TEXT NOT NULL,
         password TEXT NOT NULL
     )`;
@@ -23,9 +23,9 @@ _.DropTable = () => {
 }
 
 _.Post = (user) => {
-    const query = `INSERT INTO user (id, username, password) VALUES (?, ?, ?)`;
+    const query = `INSERT INTO user (username, password) VALUES (?, ?)`;
     const _db = db.GetConnection();
-    _db.prepare(query).run(user.id, user.username, user.password);
+    _db.prepare(query).run(user.username, user.password);
     _db.close();
 }
 

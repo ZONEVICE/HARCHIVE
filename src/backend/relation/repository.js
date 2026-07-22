@@ -4,10 +4,10 @@ const _ = {}
 
 _.CREATE_TABLE = `
     CREATE TABLE IF NOT EXISTS relation (
-        id        TEXT PRIMARY KEY,
-        id_1      TEXT NOT NULL,
+        id        INTEGER PRIMARY KEY,
+        id_1      INTEGER NOT NULL,
         entity_1  TEXT NOT NULL,
-        id_2          TEXT NOT NULL,
+        id_2          INTEGER NOT NULL,
         entity_2      TEXT NOT NULL,
         relation_type TEXT NOT NULL,
         note          TEXT,
@@ -36,8 +36,8 @@ _.getByEntityId = (entity_id) => db.prepare(
 ).all(entity_id, entity_id)
 
 _.post = (relation) => db.prepare(
-    'INSERT INTO relation (id, id_1, entity_1, id_2, entity_2, relation_type, note, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-).run(relation.id, relation.id_1, relation.entity_1, relation.id_2, relation.entity_2, relation.relation_type, relation.note, relation.deleted_at)
+    'INSERT INTO relation (id_1, entity_1, id_2, entity_2, relation_type, note, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+).run(relation.id_1, relation.entity_1, relation.id_2, relation.entity_2, relation.relation_type, relation.note, relation.deleted_at)
 
 _.update = (relation) => db.prepare(
     'UPDATE relation SET id_1 = ?, entity_1 = ?, id_2 = ?, entity_2 = ?, relation_type = ?, note = ?, deleted_at = ? WHERE id = ?'
