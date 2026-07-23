@@ -1,4 +1,4 @@
-const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../core/constants')
+const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD, SESSION_COOKIE_NAME } = require('../core/constants')
 const { PORT } = require('../core/env')
 const URL = `http://localhost:${PORT}`;
 
@@ -43,6 +43,20 @@ describe('User Tests', () => {
             expect(res.length).toBe(1);
         });
     });
+    describe('LoadUserByUsername', () => {
+        it('Should load user by username', () => {
+            user_repository.CreateTable();
+            user_service.createAdminUser();
+            const user = user_repository.LoadUserByUsername(ADMIN_USERNAME);
+            expect(user).not.toBeNull();
+            expect(user.username).toBe(ADMIN_USERNAME);
+        });
+        it('Not found', () => {
+            user_repository.CreateTable();
+            const user = user_repository.LoadUserByUsername('NOBODY');
+            expect(user).toBeNull();
+        });
+    });
     describe('LoadUserById', () => {
         it('Should load user by id', () => {
             user_repository.CreateTable();
@@ -72,20 +86,88 @@ describe('User Tests', () => {
     describe('API /Login', () => {
         it('Login is successfull', async () => {
             const res = await axios.post(`${URL}/api/user/login/`, {
+                username: ADMIN_USERNAME,
                 password: 'newpassword'
             });
             expect(res.data.status).toBe('success');
             expect(res.data.description).toBe('login successful');
         });
+        it('Login sends the session cookie', async () => {
+            const res = await axios.post(`${URL}/api/user/login/`, {
+                username: ADMIN_USERNAME,
+                password: 'newpassword'
+            });
+            const cookies = res.headers['set-cookie'];
+            expect(Array.isArray(cookies)).toBe(true);
+            expect(cookies[0]).toContain(`${SESSION_COOKIE_NAME}=`);
+            expect(cookies[0]).toContain('HttpOnly');
+        });
         it('Login fails with invalid credentials', async () => {
             try {
                 const res = await axios.post(`${URL}/api/user/login/`, {
+                    username: ADMIN_USERNAME,
                     password: 'wrongpassword'
                 });
             } catch (error) {
                 expect(error.response.data.status).toBe('warning');
                 expect(error.response.data.description).toBe('invalid credentials');
             }
+        });
+        it('Login fails with an unknown username', async () => {
+            try {
+                const res = await axios.post(`${URL}/api/user/login/`, {
+                    username: 'NOBODY',
+                    password: 'newpassword'
+                });
+            } catch (error) {
+                expect(error.response.status).toBe(401);
+                expect(error.response.data.status).toBe('warning');
+                expect(error.response.data.description).toBe('invalid credentials');
+            }
+        });
+        it('Login fails when the username is missing', async () => {
+            try {
+                const res = await axios.post(`${URL}/api/user/login/`, {
+                    password: 'newpassword'
+                });
+            } catch (error) {
+                expect(error.response.status).toBe(400);
+                expect(error.response.data.status).toBe('warning');
+                expect(error.response.data.description).toBe('invalid credentials');
+            }
+        });
+    });
+    describe('API /Logout', () => {
+        it('Logout removes the session cookie', async () => {
+            const login = await axios.post(`${URL}/api/user/login/`, {
+                username: ADMIN_USERNAME,
+                password: 'newpassword'
+            });
+            const session_cookie = login.headers['set-cookie'][0].split(';')[0];
+
+            const res = await axios.get(`${URL}/api/user/logout/`, {
+                headers: { Cookie: session_cookie }
+            });
+            expect(res.data.status).toBe('success');
+            expect(res.data.description).toBe('logout successful');
+
+            // The browser drops the cookie because it comes back empty and already expired.
+            const cookies = res.headers['set-cookie'];
+            expect(cookies[0]).toContain(`${SESSION_COOKIE_NAME}=;`);
+            expect(cookies[0]).toContain('Expires=Thu, 01 Jan 1970');
+        });
+        it('Logout without a session', async () => {
+            const res = await axios.get(`${URL}/api/user/logout/`);
+            expect(res.data.status).toBe('warning');
+            expect(res.data.description).toBe('no active session');
+            expect(res.headers['set-cookie']).toBeUndefined();
+        });
+        it('Logout ignores other cookies', async () => {
+            const res = await axios.get(`${URL}/api/user/logout/`, {
+                headers: { Cookie: 'another_cookie=value' }
+            });
+            expect(res.data.status).toBe('warning');
+            expect(res.data.description).toBe('no active session');
         });
     });
     describe('API / Change Password', () => {
@@ -99,6 +181,7 @@ describe('User Tests', () => {
 
             // Verify login with new password
             const loginRes = await axios.post(`${URL}/api/user/login/`, {
+                username: ADMIN_USERNAME,
                 password: 'finalpassword'
             });
             expect(loginRes.data.status).toBe('success');

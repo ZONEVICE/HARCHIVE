@@ -29,10 +29,10 @@ _.Post = (user) => {
     _db.close();
 }
 
-_.LoadAdminUser = () => {
+_.LoadUserByUsername = username => {
     const query = `SELECT * FROM user WHERE username = ?`;
     const _db = db.GetConnection();
-    let res = _db.prepare(query).all(ADMIN_USERNAME);
+    let res = _db.prepare(query).all(username);
     _db.close();
     if (res.length === 0) {
         return null;
@@ -44,6 +44,9 @@ _.LoadAdminUser = () => {
     user.password = row.password;
     return user;
 }
+
+// The admin user is just the user holding the name from constants.js.
+_.LoadAdminUser = () => _.LoadUserByUsername(ADMIN_USERNAME);
 
 _.LoadUserById = id => {
     const query = `SELECT * FROM user WHERE id = ?`;

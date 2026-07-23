@@ -1,5 +1,4 @@
 module.exports = class User {
-    // The id is assigned by the database (INTEGER PRIMARY KEY) on insert, so it starts null.
     #id = null
     #username = ''
     #password = ''
