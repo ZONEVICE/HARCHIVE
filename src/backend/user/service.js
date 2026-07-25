@@ -26,11 +26,15 @@ _.login = (username, password) => {
     return createToken({ id: user.id })
 }
 
-// Returns false when the current password does not match, leaving the stored one untouched.
-_.changePassword = (old_password, new_password) => {
-    const admin_user = repository.LoadAdminUser()
-    if (admin_user.password !== old_password) return false
-    repository.SetPassword(admin_user.id, new_password)
+// Changes the password of the user identified by the session id (taken from the JWT).
+//  Returns false when that user no longer exists or the current password does not match,
+//  leaving the stored one untouched. Passwords are plain text for now, so it is a direct
+//  comparison.
+_.changePassword = (id, old_password, new_password) => {
+    const user = repository.LoadUserById(id)
+    if (user === null) return false
+    if (user.password !== old_password) return false
+    repository.SetPassword(user.id, new_password)
     return true
 }
 

@@ -8,4 +8,10 @@ _.validateLogin = (body) => {
     return true
 }
 
+_.validateChangePassword = (body) => {
+    if (!_.isString(body.old_password)) return false
+    if (!_.isString(body.new_password)) return false
+    return true
+}
+
 module.exports = _

@@ -171,11 +171,34 @@ describe('User Tests', () => {
         });
     });
     describe('API / Change Password', () => {
-        it('Change password is successful', async () => {
-            const res = await axios.post(`${URL}/api/user/change_password/`, {
-                old_password: 'newpassword', // in previous test we set it to 'newpassword'
-                new_password: 'finalpassword'
+        // Logs in and returns the raw `name=value` session cookie for a protected request.
+        const loginAndGetCookie = async (password) => {
+            const login = await axios.post(`${URL}/api/user/login/`, {
+                username: ADMIN_USERNAME,
+                password
             });
+            return login.headers['set-cookie'][0].split(';')[0];
+        };
+
+        it('Change password requires an active session', async () => {
+            try {
+                await axios.post(`${URL}/api/user/change_password/`, {
+                    old_password: 'newpassword',
+                    new_password: 'finalpassword'
+                });
+            } catch (error) {
+                expect(error.response.status).toBe(401);
+                expect(error.response.data.status).toBe('warning');
+                expect(error.response.data.description).toBe('authentication required');
+            }
+        });
+        it('Change password is successful', async () => {
+            const session_cookie = await loginAndGetCookie('newpassword'); // set by the SetPassword test
+
+            const res = await axios.post(`${URL}/api/user/change_password/`, {
+                old_password: 'newpassword',
+                new_password: 'finalpassword'
+            }, { headers: { Cookie: session_cookie } });
             expect(res.data.status).toBe('success');
             expect(res.data.description).toBe('password changed successfully');
 
@@ -187,27 +210,29 @@ describe('User Tests', () => {
             expect(loginRes.data.status).toBe('success');
             expect(loginRes.data.description).toBe('login successful');
         });
-        it('API / Change password fails with invalid credentials', async () => {
+        it('Change password fails with a wrong current password', async () => {
+            const session_cookie = await loginAndGetCookie('finalpassword');
+
             try {
-                const res = await axios.post(`${URL}/api/user/change_password/`, {
+                await axios.post(`${URL}/api/user/change_password/`, {
                     old_password: 'wrongpassword',
                     new_password: 'e'
-                });
+                }, { headers: { Cookie: session_cookie } });
             } catch (error) {
+                expect(error.response.status).toBe(401);
                 expect(error.response.data.status).toBe('warning');
                 expect(error.response.data.description).toBe('invalid credentials');
             }
         });
-         it('API / Additional > Revert password to default password', async () => {
-            try {
-                const res = await axios.post(`${URL}/api/user/change_password/`, {
-                    old_password: 'finalpassword',
-                    new_password: ADMIN_DEFAULT_PASSWORD
-                });
-            } catch (error) {
-                expect(error.response.data.status).toBe('success');
-                expect(error.response.data.description).toBe('password changed successfully');
-            }
+        it('Revert password to the default password', async () => {
+            const session_cookie = await loginAndGetCookie('finalpassword');
+
+            const res = await axios.post(`${URL}/api/user/change_password/`, {
+                old_password: 'finalpassword',
+                new_password: ADMIN_DEFAULT_PASSWORD
+            }, { headers: { Cookie: session_cookie } });
+            expect(res.data.status).toBe('success');
+            expect(res.data.description).toBe('password changed successfully');
         });
     });
 });

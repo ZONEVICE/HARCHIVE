@@ -49,17 +49,25 @@ _.logout = async (req, res) => {
 }
 
 /**
- * Change password for the default user.
+ * Change password for the logged-in user.
+ * The `authenticate` middleware guards this route, so `req.session.id` is the id of the
+ * user to change, taken from the signed session cookie — never from the request body.
  * @param {String} req.body.old_password Current password.
  * @param {String} req.body.new_password New password.
  */
 _.changePassword = async (req, res) => {
-    const { old_password, new_password } = req.body;
+    try {
+        if (!validators.validateChangePassword(req.body)) return res.status(400).json({ status: 'warning', description: 'invalid credentials' });
 
-    if (service.changePassword(old_password, new_password)) {
-        res.json({ status: 'success', description: 'password changed successfully' });
-    } else {
-        res.status(401).json({ status: 'warning', description: 'invalid credentials' });
+        const { old_password, new_password } = req.body;
+
+        if (service.changePassword(req.session.id, old_password, new_password)) {
+            return res.json({ status: 'success', description: 'password changed successfully' });
+        }
+        return res.status(401).json({ status: 'warning', description: 'invalid credentials' });
+    } catch (error) {
+        console.error('Error:', error.message);
+        return res.status(500).json({ status: 'failed', description: 'password change failed' });
     }
 }
 

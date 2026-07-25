@@ -5,8 +5,11 @@ test/
 data/
 ignore.*
 ig.*
+dev/
 # No code.
 *.odt
 *.odt#
 docs/
 project_manager
+# Trash
+package-lock.json
