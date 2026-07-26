@@ -43,6 +43,10 @@ _.update = (relation) => db.prepare(
     'UPDATE relation SET id_1 = ?, entity_1 = ?, id_2 = ?, entity_2 = ?, relation_type = ?, note = ?, deleted_at = ? WHERE id = ?'
 ).run(relation.id_1, relation.entity_1, relation.id_2, relation.entity_2, relation.relation_type, relation.note, relation.deleted_at, relation.id)
 
+_.softDelete = (id, deleted_at) => db.prepare('UPDATE relation SET deleted_at = ? WHERE id = ?').run(deleted_at, id)
+
+// Physical deletes. They are not reachable from any HTTP endpoint: only backend code
+//  calling service.hardDelete gets to them.
 _.deleteById = (id) => db.prepare('DELETE FROM relation WHERE id = ?').run(id)
 
 _.deleteAll = () => db.prepare('DELETE FROM relation').run()

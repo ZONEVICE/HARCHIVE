@@ -90,7 +90,7 @@ _.update = async (req, res) => {
 
 _.deleteById = async (req, res) => {
     try {
-        repository.deleteById(req.params.id)
+        service.softDelete(req.params.id)
         res.status(200).json({ status: 'success', description: 'relation deleted' })
     } catch (e) {
         res.status(500).json({ status: 'failed', description: 'relation deletion failed' })

@@ -334,20 +334,33 @@ describe('PUT /api/relation/update/ deleted_at', () => {
     })
 })
 
-describe('DELETE /api/relation/id/:id', () => {
-    it('returns 200 on delete', async () => {
+describe('DELETE /api/relation/id/:id (soft-delete)', () => {
+    let throwaway_id = ''
+
+    it('stamps deleted_at and keeps the relation readable', async () => {
         // Delete a throwaway relation so the sample relations persist in the database.
         await axios.post(`${URL}/api/relation/`, { ...SAMPLE, note: 'throwaway-relation' }, { validateStatus: () => true })
-        const throwaway_id = await findRelationIdByNote('throwaway-relation')
+        throwaway_id = await findRelationIdByNote('throwaway-relation')
 
         const res = await axios.delete(`${URL}/api/relation/id/${throwaway_id}`, { validateStatus: () => true })
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(res.data.description).toBe('relation deleted')
+
+        // Soft-deleted: the row stays readable so the client can show it in a trash can.
+        const gone = await axios.get(`${URL}/api/relation/id/${throwaway_id}`, { validateStatus: () => true })
+        expect(gone.status).toBe(200)
+        expect(typeof gone.data.data.deleted_at).toBe('number')
+
+        const list = await axios.get(`${URL}/api/relation/`, { validateStatus: () => true })
+        expect(list.data.data.find(r => r.id === throwaway_id)).toBeDefined()
     })
 
-    it('the relation is gone after deletion', async () => {
-        const gone_id = await findRelationIdByNote('throwaway-relation')
-        expect(gone_id).toBeNull()
+    it('restores the deleted relation through the update endpoint', async () => {
+        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: throwaway_id, note: 'throwaway-relation', deleted_at: false }, { validateStatus: () => true })
+        expect(res.status).toBe(200)
+
+        const restored = await axios.get(`${URL}/api/relation/id/${throwaway_id}`, { validateStatus: () => true })
+        expect(restored.data.data.deleted_at).toBeNull()
     })
 })

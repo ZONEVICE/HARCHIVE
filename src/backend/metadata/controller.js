@@ -38,6 +38,9 @@ _.update = async (req, res) => {
         if (!validators.validateUpdate(req.body)) return res.status(400).json({ status: 'warning', description: 'metadata invalid' })
         const current = repository.getById(req.body.id)
         const metadata = service.buildForUpdate(current, req.body)
+        if (service.isNameTakenByAnother(metadata.name, metadata.id)) {
+            return res.status(409).json({ status: 'warning', description: 'metadata already exists' })
+        }
         repository.update(metadata)
         res.status(200).json({ status: 'success', description: 'metadata updated' })
     } catch (e) {
@@ -49,6 +52,9 @@ _.post = async (req, res) => {
     try {
         if (!validators.validatePost(req.body)) return res.status(400).json({ status: 'warning', description: 'metadata invalid' })
         const metadata = service.buildForCreate(req.body)
+        if (service.isNameTaken(metadata.name)) {
+            return res.status(409).json({ status: 'warning', description: 'metadata already exists' })
+        }
         repository.post(metadata)
         res.status(201).json({ status: 'success', description: 'metadata created' })
     } catch (e) {
@@ -58,7 +64,7 @@ _.post = async (req, res) => {
 
 _.deleteByName = async (req, res) => {
     try {
-        repository.deleteByName(req.params.name)
+        service.softDeleteByName(req.params.name)
         res.status(200).json({ status: 'success', description: 'metadata deleted' })
     } catch (e) {
         res.status(500).json({ status: 'failed', description: 'metadata deletion failed' })

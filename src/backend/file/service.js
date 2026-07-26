@@ -1,4 +1,5 @@
 const File = require('./model')
+const repository = require('./repository')
 const { getSystemTime } = require('../core/time')
 
 const _ = {}
@@ -30,5 +31,13 @@ _.buildForUpdate = (current, body) => {
     file.setClass(body.id, body.name, body.hash_256_sha, body.relative_path, body.extension, deleted_at)
     return file
 }
+
+// Soft-delete: stamp deleted_at instead of removing the row, so the record stays readable
+//  and the client can show it in a trash can. This is what the DELETE endpoint calls.
+_.softDelete = (id) => repository.softDelete(id, getSystemTime())
+
+// Hard-delete: physically removes the row. Deliberately not wired to any HTTP endpoint —
+//  it exists for backend code that genuinely needs to purge a record.
+_.hardDelete = (id) => repository.deleteById(id)
 
 module.exports = _

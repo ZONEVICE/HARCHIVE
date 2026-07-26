@@ -28,6 +28,19 @@ describe('POST /api/metadata/', () => {
         expect(res.data.status).toBe('success')
         expect(res.data.description).toBe('metadata created')
     })
+
+    it('returns 409 warning on duplicate name', async () => {
+        const res = await axios.post(`${URL}/api/metadata/`, { name: SAMPLE.name, value: 'another value' }, { validateStatus: () => true })
+        expect(res.status).toBe(409)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('metadata already exists')
+    })
+
+    it('treats names as case-sensitive (the column has no COLLATE NOCASE)', async () => {
+        const res = await axios.post(`${URL}/api/metadata/`, { name: SAMPLE.name.toUpperCase(), value: 'upper case' }, { validateStatus: () => true })
+        expect(res.status).toBe(201)
+        expect(res.data.status).toBe('success')
+    })
 })
 
 describe('GET /api/metadata/', () => {
@@ -86,6 +99,24 @@ describe('PUT /api/metadata/update/', () => {
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(res.data.description).toBe('metadata updated')
+    })
+
+    it('returns 409 warning when renaming onto a name another record already holds', async () => {
+        await axios.post(`${URL}/api/metadata/`, { name: 'other_key', value: 'other' }, { validateStatus: () => true })
+
+        const res = await axios.put(`${URL}/api/metadata/update/`, { id: created_id, name: 'other_key', value: 'HARCHIVE Updated' }, { validateStatus: () => true })
+        expect(res.status).toBe(409)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('metadata already exists')
+    })
+
+    it('lets a record keep its own name on update', async () => {
+        const res = await axios.put(`${URL}/api/metadata/update/`, { id: created_id, name: SAMPLE.name, value: 'HARCHIVE Updated Again' }, { validateStatus: () => true })
+        expect(res.status).toBe(200)
+        expect(res.data.status).toBe('success')
+
+        const get = await axios.get(`${URL}/api/metadata/id/${created_id}`, { validateStatus: () => true })
+        expect(get.data.data.value).toBe('HARCHIVE Updated Again')
     })
 })
 
@@ -198,15 +229,44 @@ describe('PUT /api/metadata/update/ deleted_at', () => {
     })
 })
 
-describe('DELETE /api/metadata/name/:name', () => {
-    it('returns 200 on delete', async () => {
-        // Delete a throwaway record so SAMPLE stays in the database after the tests.
-        const throwaway = { name: 'throwaway_name', value: 'temp' }
-        await axios.post(`${URL}/api/metadata/`, throwaway, { validateStatus: () => true })
+describe('DELETE /api/metadata/name/:name (soft-delete)', () => {
+    const THROWAWAY = { name: 'throwaway_name', value: 'temp' }
 
-        const res = await axios.delete(`${URL}/api/metadata/name/${throwaway.name}`, { validateStatus: () => true })
+    it('stamps deleted_at and keeps the metadata readable', async () => {
+        // Delete a throwaway record so SAMPLE stays in the database after the tests.
+        await axios.post(`${URL}/api/metadata/`, THROWAWAY, { validateStatus: () => true })
+
+        const res = await axios.delete(`${URL}/api/metadata/name/${THROWAWAY.name}`, { validateStatus: () => true })
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(res.data.description).toBe('metadata deleted')
+
+        // Soft-deleted: the row stays readable so the client can show it in a trash can.
+        const gone = await axios.get(`${URL}/api/metadata/name/${THROWAWAY.name}`, { validateStatus: () => true })
+        expect(gone.status).toBe(200)
+        expect(typeof gone.data.data.deleted_at).toBe('number')
+
+        const list = await axios.get(`${URL}/api/metadata/`, { validateStatus: () => true })
+        expect(list.data.data.find(m => m.name === THROWAWAY.name)).toBeDefined()
+    })
+
+    it('returns 409 warning when re-creating a name that sits in the trash can', async () => {
+        // The soft-deleted row still holds the name, so this must be a controlled 409 and
+        //  never a UNIQUE constraint surfacing as a 500.
+        const res = await axios.post(`${URL}/api/metadata/`, THROWAWAY, { validateStatus: () => true })
+        expect(res.status).toBe(409)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('metadata already exists')
+    })
+
+    it('restores the deleted metadata through the update endpoint', async () => {
+        const current = await axios.get(`${URL}/api/metadata/name/${THROWAWAY.name}`, { validateStatus: () => true })
+        const target_id = current.data.data.id
+
+        const res = await axios.put(`${URL}/api/metadata/update/`, { id: target_id, name: THROWAWAY.name, value: THROWAWAY.value, deleted_at: false }, { validateStatus: () => true })
+        expect(res.status).toBe(200)
+
+        const restored = await axios.get(`${URL}/api/metadata/id/${target_id}`, { validateStatus: () => true })
+        expect(restored.data.data.deleted_at).toBeNull()
     })
 })

@@ -30,6 +30,10 @@ _.post = (file) => db.prepare('INSERT INTO file (name, hash_256_sha, relative_pa
 
 _.update = (file) => db.prepare('UPDATE file SET name = ?, hash_256_sha = ?, relative_path = ?, extension = ?, deleted_at = ? WHERE id = ?').run(file.name, file.hash_256_sha, file.relative_path, file.extension, file.deleted_at, file.id)
 
+_.softDelete = (id, deleted_at) => db.prepare('UPDATE file SET deleted_at = ? WHERE id = ?').run(deleted_at, id)
+
+// Physical deletes. They are not reachable from any HTTP endpoint: only backend code
+//  calling service.hardDelete gets to them.
 _.deleteById = (id) => db.prepare('DELETE FROM file WHERE id = ?').run(id)
 
 _.deleteAll = () => db.prepare('DELETE FROM file').run()

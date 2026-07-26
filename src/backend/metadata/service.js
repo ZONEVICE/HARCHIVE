@@ -1,4 +1,5 @@
 const Metadata = require('./model')
+const repository = require('./repository')
 const { getSystemTime } = require('../core/time')
 
 const _ = {}
@@ -28,5 +29,25 @@ _.buildForUpdate = (current, body) => {
     metadata.setClass(body.id, body.name, body.value, deleted_at)
     return metadata
 }
+
+// Metadata names are unique (case-sensitive, the column has no COLLATE NOCASE). Soft-deleted
+//  records still hold their name, so they count as taken here: re-creating a name that sits in
+//  the trash can is a 409, not a UNIQUE constraint blowing up as a 500.
+_.isNameTaken = (name) => repository.getByName(name) !== null
+
+// Same rule, but ignoring the record being updated so it can keep its own name.
+_.isNameTakenByAnother = (name, id) => {
+    const clash = repository.getByName(name)
+    if (!clash) return false
+    return clash.id !== id
+}
+
+// Soft-delete: stamp deleted_at instead of removing the row, so the record stays readable
+//  and the client can show it in a trash can. This is what the DELETE endpoint calls.
+_.softDeleteByName = (name) => repository.softDeleteByName(name, getSystemTime())
+
+// Hard-delete: physically removes the row. Deliberately not wired to any HTTP endpoint —
+//  it exists for backend code that genuinely needs to purge a record.
+_.hardDeleteByName = (name) => repository.deleteByName(name)
 
 module.exports = _

@@ -183,8 +183,8 @@ describe('PUT /api/file/update/ deleted_at', () => {
     })
 })
 
-describe('DELETE /api/file/id/:id', () => {
-    it('returns 200 on delete', async () => {
+describe('DELETE /api/file/id/:id (soft-delete)', () => {
+    it('stamps deleted_at and keeps the file readable', async () => {
         // Delete a throwaway file so the SAMPLE file stays in the database after the tests.
         const throwaway = { name: 'throwaway.tmp', hash_256_sha: 'throwaway-hash', relative_path: '/tmp/throwaway.tmp', extension: 'tmp' }
         await axios.post(`${URL}/api/file/`, throwaway, { validateStatus: () => true })
@@ -196,5 +196,31 @@ describe('DELETE /api/file/id/:id', () => {
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(res.data.description).toBe('file deleted')
+
+        // Soft-deleted: the row stays readable so the client can show it in a trash can.
+        const gone = await axios.get(`${URL}/api/file/id/${throwaway_id}`, { validateStatus: () => true })
+        expect(gone.status).toBe(200)
+        expect(typeof gone.data.data.deleted_at).toBe('number')
+
+        const after = await axios.get(`${URL}/api/file/`, { validateStatus: () => true })
+        expect(after.data.data.find(f => f.id === throwaway_id)).toBeDefined()
+    })
+
+    it('restores the deleted file through the update endpoint', async () => {
+        const list = await axios.get(`${URL}/api/file/`, { validateStatus: () => true })
+        const throwaway = list.data.data.find(f => f.hash_256_sha === 'throwaway-hash')
+
+        const res = await axios.put(`${URL}/api/file/update/`, {
+            id: throwaway.id,
+            name: throwaway.name,
+            hash_256_sha: throwaway.hash_256_sha,
+            relative_path: throwaway.relative_path,
+            extension: throwaway.extension,
+            deleted_at: false
+        }, { validateStatus: () => true })
+        expect(res.status).toBe(200)
+
+        const restored = await axios.get(`${URL}/api/file/id/${throwaway.id}`, { validateStatus: () => true })
+        expect(restored.data.data.deleted_at).toBeNull()
     })
 })
