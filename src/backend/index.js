@@ -15,11 +15,15 @@ const file_repository = require('./file/repository');
 file_repository.createTable();
 
 const user_repository = require('./user/repository');
+const user_service = require('./user/service');
 user_repository.CreateTable();
-user_repository.CreateAdminUser();
+user_service.createAdminUser();
 
 const relation_repository = require('./relation/repository');
 relation_repository.createTable();
+
+const tag_repository = require('./tag/repository');
+tag_repository.createTable();
 
 // --------------------------------------------------------------------------------
 // Starts web server

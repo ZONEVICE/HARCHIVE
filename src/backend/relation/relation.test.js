@@ -3,9 +3,15 @@ const URL = `http://localhost:${PORT}`
 
 const axios = require('axios')
 
-const { SYSTEM_ENTITIES } = require('../core/constants')
+const { SYSTEM_ENTITIES, ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD, SESSION_COOKIE_NAME } = require('../core/constants')
+const { readCookie } = require('../core/cookies')
+const { verifyToken } = require('../core/jwt')
 const { RELATION_TYPES } = require('./types-of-relation')
 const relation_repository = require('./repository')
+
+// Every request is read as data, never as an exception, so each test asserts the status code
+//  itself instead of branching on a thrown error.
+const ANY_STATUS = { validateStatus: () => true }
 
 const SAMPLE = {
     id_1: 100,
@@ -31,8 +37,11 @@ let second_id = ''
 
 async function findRelationIdByNote(note) {
     const res = await axios.get(`${URL}/api/relation/`, { validateStatus: () => true })
-    const found = res.data.data.find(r => r.note === note)
-    return found ? found.id : null
+    const found = res.data.data.filter(r => r.note === note)
+    if (found.length === 0) return null
+    // The last match is the one this run created: relations are only ever soft-deleted, so a
+    //  note can survive from an earlier run whenever the table was not wiped.
+    return found[found.length - 1].id
 }
 
 beforeAll(() => {
@@ -362,5 +371,773 @@ describe('DELETE /api/relation/id/:id (soft-delete)', () => {
 
         const restored = await axios.get(`${URL}/api/relation/id/${throwaway_id}`, { validateStatus: () => true })
         expect(restored.data.data.deleted_at).toBeNull()
+    })
+})
+
+// --------------------------------------------------------------------------------
+// Tag associations.
+//
+// A tag is attached to the rest of the system through this entity and nothing else:
+// there is no tag column on file, directory or anything. That makes these tests
+// relation tests, even though the record on the other side is always a tag.
+//
+// There is one block per name in SYSTEM_ENTITIES, and every block drives the six
+// routes of tag/routes.js while a live relation points at the tag. The point is the
+// stress: renaming a tag, soft-deleting it or changing the entity catalogue must
+// break these tests loudly instead of silently leaving a dangling association.
+// --------------------------------------------------------------------------------
+
+// The scaffolding tags carry a per-run suffix. Tag names are UNIQUE and this file must not
+//  wipe another entity's table, so the suffix is what keeps the names free on every run,
+//  whatever has run before.
+const RUN = Date.now()
+
+// One wrapper per route in tag/routes.js. The tag entity is reached only through its own HTTP
+//  surface here, never through its internals.
+const tagGetAll = () => axios.get(`${URL}/api/tag/`, ANY_STATUS)
+const tagGetById = (id) => axios.get(`${URL}/api/tag/id/${id}`, ANY_STATUS)
+const tagGetByName = (name) => axios.get(`${URL}/api/tag/name/${encodeURIComponent(name)}`, ANY_STATUS)
+const tagPost = (body) => axios.post(`${URL}/api/tag/`, body, ANY_STATUS)
+const tagUpdate = (body) => axios.put(`${URL}/api/tag/update/`, body, ANY_STATUS)
+const tagDelete = (id) => axios.delete(`${URL}/api/tag/id/${id}`, ANY_STATUS)
+
+const relationPost = (body) => axios.post(`${URL}/api/relation/`, body, ANY_STATUS)
+const relationGetById = (id) => axios.get(`${URL}/api/relation/id/${id}`, ANY_STATUS)
+const relationGetByEntity = (entity) => axios.get(`${URL}/api/relation/entity/${entity}`, ANY_STATUS)
+const relationGetByEntityId = (id) => axios.get(`${URL}/api/relation/entity_id/${id}`, ANY_STATUS)
+const relationDelete = (id) => axios.delete(`${URL}/api/relation/id/${id}`, ANY_STATUS)
+
+describe('System entity catalogue coverage', () => {
+    // Guard for the blocks below: each entity of the catalogue has its own block. When an
+    //  entity is added, removed or renamed in SYSTEM_ENTITIES this test fails, as a reminder
+    //  to write (or retire) the matching block instead of silently losing the coverage.
+    const COVERED_ENTITIES = ['directory', 'file', 'metadata', 'profile', 'relation', 'tag', 'user']
+
+    it('SYSTEM_ENTITIES holds exactly the entities covered by the blocks below', () => {
+        expect([...SYSTEM_ENTITIES].sort()).toEqual([...COVERED_ENTITIES].sort())
+    })
+
+    it('offers the relation types the blocks below use', async () => {
+        const res = await axios.get(`${URL}/api/relation/types/`, ANY_STATUS)
+        expect(res.status).toBe(200)
+        expect(res.data.data).toContain('tagged')
+        expect(res.data.data).toContain('implies')
+        expect(res.data.data).toContain('linked')
+    })
+})
+
+describe('directory x tag — the six tag routes with a live relation', () => {
+    const TAG = { name: `rel-directory-${RUN}`, metadata: '{"related_to":"directory"}' }
+    const RENAMED = `rel-directory-renamed-${RUN}`
+    const NOTE = `relation-test: directory <-> tag ${RUN}`
+
+    // directory/ is not wired into the server yet: it has no table and no routes, so there is
+    //  no record to point at and the relation uses a placeholder id. The relation table holds
+    //  no foreign keys, so the link is stored all the same.
+    const directory_id = 1
+
+    let tag_id = ''
+    let relation_id = ''
+
+    it('the directory entity is still unwired (reminder to complete this block)', async () => {
+        // When directory gets its routes, replace directory_id above with a real record and
+        //  drop this test.
+        const res = await axios.get(`${URL}/api/directory/`, ANY_STATUS)
+        expect(res.status).toBe(404)
+    })
+
+    it('POST /api/tag/ creates the tag the directory will be tagged with', async () => {
+        const res = await tagPost(TAG)
+        expect(res.status).toBe(201)
+        expect(res.data.status).toBe('success')
+
+        const created = await tagGetByName(TAG.name)
+        tag_id = created.data.data.id
+        expect(typeof tag_id).toBe('number')
+    })
+
+    it('relates the directory to the tag with a "tagged" relation', async () => {
+        const res = await relationPost({
+            id_1: directory_id,
+            entity_1: 'directory',
+            id_2: tag_id,
+            entity_2: 'tag',
+            relation_type: 'tagged',
+            note: NOTE
+        })
+        expect(res.status).toBe(201)
+
+        relation_id = await findRelationIdByNote(NOTE)
+        expect(typeof relation_id).toBe('number')
+    })
+
+    it('GET /api/tag/ lists the related tag', async () => {
+        const res = await tagGetAll()
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(t => t.id === tag_id)).toBeDefined()
+    })
+
+    it('GET /api/tag/id/:id resolves the tag the relation points at', async () => {
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.entity_1).toBe('directory')
+        expect(relation.data.data.entity_2).toBe('tag')
+
+        const res = await tagGetById(relation.data.data.id_2)
+        expect(res.status).toBe(200)
+        expect(res.data.data.name).toBe(TAG.name)
+    })
+
+    it('GET /api/tag/name/:name resolves the same tag, whatever the case', async () => {
+        const res = await tagGetByName(TAG.name.toUpperCase())
+        expect(res.status).toBe(200)
+        expect(res.data.data.id).toBe(tag_id)
+    })
+
+    it('PUT /api/tag/update/ renames the tag without breaking the relation', async () => {
+        const res = await tagUpdate({ id: tag_id, name: RENAMED, metadata: TAG.metadata })
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.id_2).toBe(tag_id)
+
+        const renamed = await tagGetById(relation.data.data.id_2)
+        expect(renamed.data.data.name).toBe(RENAMED)
+    })
+
+    it('DELETE /api/tag/id/:id soft-deletes the tag and the relation still resolves it', async () => {
+        const res = await tagDelete(tag_id)
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        const tag = await tagGetById(relation.data.data.id_2)
+        expect(tag.status).toBe(200)
+        expect(typeof tag.data.data.deleted_at).toBe('number')
+    })
+
+    it('GET /api/relation/entity/directory still lists the relation', async () => {
+        const res = await relationGetByEntity('directory')
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(r => r.id === relation_id)).toBeDefined()
+    })
+
+    afterAll(async () => {
+        await relationDelete(relation_id)
+    })
+})
+
+describe('file x tag — the six tag routes with a live relation', () => {
+    const TAG = { name: `rel-file-${RUN}`, metadata: '{"related_to":"file"}' }
+    const RENAMED = `rel-file-renamed-${RUN}`
+    const NOTE = `relation-test: file <-> tag ${RUN}`
+    const HASH = `rel-file-hash-${RUN}`
+
+    let tag_id = ''
+    let file_id = ''
+    let relation_id = ''
+
+    beforeAll(async () => {
+        // Scaffolding: the file only exists to be the other side of the relation.
+        await axios.post(`${URL}/api/file/`, {
+            name: 'rel-file.png',
+            hash_256_sha: HASH,
+            relative_path: '/rel/rel-file.png',
+            extension: 'png'
+        }, ANY_STATUS)
+        const files = await axios.get(`${URL}/api/file/`, ANY_STATUS)
+        file_id = files.data.data.find(f => f.hash_256_sha === HASH).id
+    })
+
+    it('POST /api/tag/ creates the tag the file will be tagged with', async () => {
+        const res = await tagPost(TAG)
+        expect(res.status).toBe(201)
+        expect(res.data.status).toBe('success')
+
+        const created = await tagGetByName(TAG.name)
+        tag_id = created.data.data.id
+        expect(typeof tag_id).toBe('number')
+    })
+
+    it('relates the file to the tag with a "tagged" relation', async () => {
+        const res = await relationPost({
+            id_1: file_id,
+            entity_1: 'file',
+            id_2: tag_id,
+            entity_2: 'tag',
+            relation_type: 'tagged',
+            note: NOTE
+        })
+        expect(res.status).toBe(201)
+
+        relation_id = await findRelationIdByNote(NOTE)
+        expect(typeof relation_id).toBe('number')
+    })
+
+    it('GET /api/tag/ lists the related tag', async () => {
+        const res = await tagGetAll()
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(t => t.id === tag_id)).toBeDefined()
+    })
+
+    it('GET /api/tag/id/:id resolves the tag the relation points at', async () => {
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.entity_1).toBe('file')
+        expect(relation.data.data.entity_2).toBe('tag')
+
+        const res = await tagGetById(relation.data.data.id_2)
+        expect(res.status).toBe(200)
+        expect(res.data.data.name).toBe(TAG.name)
+    })
+
+    it('GET /api/tag/name/:name resolves the same tag, whatever the case', async () => {
+        const res = await tagGetByName(TAG.name.toUpperCase())
+        expect(res.status).toBe(200)
+        expect(res.data.data.id).toBe(tag_id)
+    })
+
+    it('PUT /api/tag/update/ renames the tag without breaking the relation', async () => {
+        const res = await tagUpdate({ id: tag_id, name: RENAMED, metadata: TAG.metadata })
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.id_2).toBe(tag_id)
+
+        const renamed = await tagGetById(relation.data.data.id_2)
+        expect(renamed.data.data.name).toBe(RENAMED)
+    })
+
+    it('DELETE /api/tag/id/:id soft-deletes the tag and the relation still resolves it', async () => {
+        const res = await tagDelete(tag_id)
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        const tag = await tagGetById(relation.data.data.id_2)
+        expect(tag.status).toBe(200)
+        expect(typeof tag.data.data.deleted_at).toBe('number')
+    })
+
+    it('GET /api/relation/entity_id/:id finds the relation from the file side', async () => {
+        const res = await relationGetByEntityId(file_id)
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(r => r.id === relation_id)).toBeDefined()
+    })
+
+    afterAll(async () => {
+        await relationDelete(relation_id)
+        await axios.delete(`${URL}/api/file/id/${file_id}`, ANY_STATUS)
+    })
+})
+
+describe('metadata x tag — the six tag routes with a live relation', () => {
+    const TAG = { name: `rel-metadata-${RUN}`, metadata: '{"related_to":"metadata"}' }
+    const RENAMED = `rel-metadata-renamed-${RUN}`
+    const NOTE = `relation-test: metadata <-> tag ${RUN}`
+    const KEY = `rel_metadata_key_${RUN}`
+
+    let tag_id = ''
+    let metadata_id = ''
+    let relation_id = ''
+
+    beforeAll(async () => {
+        // Scaffolding: the metadata record only exists to be the other side of the relation.
+        await axios.post(`${URL}/api/metadata/`, { name: KEY, value: 'related to a tag' }, ANY_STATUS)
+        const res = await axios.get(`${URL}/api/metadata/name/${KEY}`, ANY_STATUS)
+        metadata_id = res.data.data.id
+    })
+
+    it('POST /api/tag/ creates the tag linked to the metadata record', async () => {
+        const res = await tagPost(TAG)
+        expect(res.status).toBe(201)
+        expect(res.data.status).toBe('success')
+
+        const created = await tagGetByName(TAG.name)
+        tag_id = created.data.data.id
+        expect(typeof tag_id).toBe('number')
+    })
+
+    it('relates the metadata record to the tag with a "linked" relation', async () => {
+        const res = await relationPost({
+            id_1: metadata_id,
+            entity_1: 'metadata',
+            id_2: tag_id,
+            entity_2: 'tag',
+            relation_type: 'linked',
+            note: NOTE
+        })
+        expect(res.status).toBe(201)
+
+        relation_id = await findRelationIdByNote(NOTE)
+        expect(typeof relation_id).toBe('number')
+    })
+
+    it('GET /api/tag/ lists the related tag', async () => {
+        const res = await tagGetAll()
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(t => t.id === tag_id)).toBeDefined()
+    })
+
+    it('GET /api/tag/id/:id resolves the tag the relation points at', async () => {
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.entity_1).toBe('metadata')
+        expect(relation.data.data.entity_2).toBe('tag')
+
+        const res = await tagGetById(relation.data.data.id_2)
+        expect(res.status).toBe(200)
+        expect(res.data.data.name).toBe(TAG.name)
+    })
+
+    it('GET /api/tag/name/:name resolves the same tag, whatever the case', async () => {
+        const res = await tagGetByName(TAG.name.toUpperCase())
+        expect(res.status).toBe(200)
+        expect(res.data.data.id).toBe(tag_id)
+    })
+
+    it('PUT /api/tag/update/ renames the tag without breaking the relation', async () => {
+        const res = await tagUpdate({ id: tag_id, name: RENAMED, metadata: TAG.metadata })
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.id_2).toBe(tag_id)
+
+        const renamed = await tagGetById(relation.data.data.id_2)
+        expect(renamed.data.data.name).toBe(RENAMED)
+    })
+
+    it('DELETE /api/tag/id/:id soft-deletes the tag and the relation still resolves it', async () => {
+        const res = await tagDelete(tag_id)
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        const tag = await tagGetById(relation.data.data.id_2)
+        expect(tag.status).toBe(200)
+        expect(typeof tag.data.data.deleted_at).toBe('number')
+    })
+
+    it('keeps the link readable after the metadata record is soft-deleted too', async () => {
+        // Both sides in the trash can: the relation is still there and still resolves.
+        await axios.delete(`${URL}/api/metadata/name/${KEY}`, ANY_STATUS)
+
+        const relation = await relationGetById(relation_id)
+        expect(relation.status).toBe(200)
+
+        const metadata = await axios.get(`${URL}/api/metadata/id/${relation.data.data.id_1}`, ANY_STATUS)
+        expect(metadata.status).toBe(200)
+        expect(typeof metadata.data.data.deleted_at).toBe('number')
+    })
+
+    afterAll(async () => {
+        await relationDelete(relation_id)
+    })
+})
+
+describe('profile x tag — the six tag routes with a live relation', () => {
+    const TAG = { name: `rel-profile-${RUN}`, metadata: '{"related_to":"profile"}' }
+    const RENAMED = `rel-profile-renamed-${RUN}`
+    const NOTE = `relation-test: profile <-> tag ${RUN}`
+
+    // profile/ is not wired into the server yet: it has no table and no routes, so the
+    //  relation points at a placeholder id, exactly like the directory block above.
+    const profile_id = 1
+
+    let tag_id = ''
+    let relation_id = ''
+
+    it('the profile entity is still unwired (reminder to complete this block)', async () => {
+        // When profile gets its routes, replace profile_id above with a real record and drop
+        //  this test.
+        const res = await axios.get(`${URL}/api/profile/`, ANY_STATUS)
+        expect(res.status).toBe(404)
+    })
+
+    it('POST /api/tag/ creates the tag linked to the profile', async () => {
+        const res = await tagPost(TAG)
+        expect(res.status).toBe(201)
+        expect(res.data.status).toBe('success')
+
+        const created = await tagGetByName(TAG.name)
+        tag_id = created.data.data.id
+        expect(typeof tag_id).toBe('number')
+    })
+
+    it('relates the profile to the tag with a "linked" relation', async () => {
+        const res = await relationPost({
+            id_1: profile_id,
+            entity_1: 'profile',
+            id_2: tag_id,
+            entity_2: 'tag',
+            relation_type: 'linked',
+            note: NOTE
+        })
+        expect(res.status).toBe(201)
+
+        relation_id = await findRelationIdByNote(NOTE)
+        expect(typeof relation_id).toBe('number')
+    })
+
+    it('GET /api/tag/ lists the related tag', async () => {
+        const res = await tagGetAll()
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(t => t.id === tag_id)).toBeDefined()
+    })
+
+    it('GET /api/tag/id/:id resolves the tag the relation points at', async () => {
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.entity_1).toBe('profile')
+        expect(relation.data.data.entity_2).toBe('tag')
+
+        const res = await tagGetById(relation.data.data.id_2)
+        expect(res.status).toBe(200)
+        expect(res.data.data.name).toBe(TAG.name)
+    })
+
+    it('GET /api/tag/name/:name resolves the same tag, whatever the case', async () => {
+        const res = await tagGetByName(TAG.name.toUpperCase())
+        expect(res.status).toBe(200)
+        expect(res.data.data.id).toBe(tag_id)
+    })
+
+    it('PUT /api/tag/update/ renames the tag without breaking the relation', async () => {
+        const res = await tagUpdate({ id: tag_id, name: RENAMED, metadata: TAG.metadata })
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.id_2).toBe(tag_id)
+
+        const renamed = await tagGetById(relation.data.data.id_2)
+        expect(renamed.data.data.name).toBe(RENAMED)
+    })
+
+    it('DELETE /api/tag/id/:id soft-deletes the tag and the relation still resolves it', async () => {
+        const res = await tagDelete(tag_id)
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        const tag = await tagGetById(relation.data.data.id_2)
+        expect(tag.status).toBe(200)
+        expect(typeof tag.data.data.deleted_at).toBe('number')
+    })
+
+    it('GET /api/relation/entity/profile still lists the relation', async () => {
+        const res = await relationGetByEntity('profile')
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(r => r.id === relation_id)).toBeDefined()
+    })
+
+    afterAll(async () => {
+        await relationDelete(relation_id)
+    })
+})
+
+describe('relation x tag — the six tag routes with a live relation', () => {
+    const TAG = { name: `rel-relation-${RUN}`, metadata: '{"related_to":"relation"}' }
+    const RENAMED = `rel-relation-renamed-${RUN}`
+    const NOTE = `relation-test: relation <-> tag ${RUN}`
+    const SCAFFOLDING_NOTE = `relation-test: relation record used as the other side ${RUN}`
+
+    let tag_id = ''
+    let related_relation_id = ''
+    let relation_id = ''
+
+    beforeAll(async () => {
+        // Scaffolding: a relation record that the tag will be linked to. A relation is an
+        //  entity of the catalogue like any other, so it can sit on the other side of a link.
+        await relationPost({
+            id_1: 1,
+            entity_1: 'file',
+            id_2: 1,
+            entity_2: 'file',
+            relation_type: 'sibling',
+            note: SCAFFOLDING_NOTE
+        })
+        related_relation_id = await findRelationIdByNote(SCAFFOLDING_NOTE)
+    })
+
+    it('POST /api/tag/ creates the tag linked to the relation record', async () => {
+        const res = await tagPost(TAG)
+        expect(res.status).toBe(201)
+        expect(res.data.status).toBe('success')
+
+        const created = await tagGetByName(TAG.name)
+        tag_id = created.data.data.id
+        expect(typeof tag_id).toBe('number')
+    })
+
+    it('relates the relation record to the tag with a "linked" relation', async () => {
+        const res = await relationPost({
+            id_1: related_relation_id,
+            entity_1: 'relation',
+            id_2: tag_id,
+            entity_2: 'tag',
+            relation_type: 'linked',
+            note: NOTE
+        })
+        expect(res.status).toBe(201)
+
+        relation_id = await findRelationIdByNote(NOTE)
+        expect(typeof relation_id).toBe('number')
+    })
+
+    it('GET /api/tag/ lists the related tag', async () => {
+        const res = await tagGetAll()
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(t => t.id === tag_id)).toBeDefined()
+    })
+
+    it('GET /api/tag/id/:id resolves the tag the relation points at', async () => {
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.entity_1).toBe('relation')
+        expect(relation.data.data.entity_2).toBe('tag')
+
+        const res = await tagGetById(relation.data.data.id_2)
+        expect(res.status).toBe(200)
+        expect(res.data.data.name).toBe(TAG.name)
+    })
+
+    it('GET /api/tag/name/:name resolves the same tag, whatever the case', async () => {
+        const res = await tagGetByName(TAG.name.toUpperCase())
+        expect(res.status).toBe(200)
+        expect(res.data.data.id).toBe(tag_id)
+    })
+
+    it('PUT /api/tag/update/ renames the tag without breaking the relation', async () => {
+        const res = await tagUpdate({ id: tag_id, name: RENAMED, metadata: TAG.metadata })
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.id_2).toBe(tag_id)
+
+        const renamed = await tagGetById(relation.data.data.id_2)
+        expect(renamed.data.data.name).toBe(RENAMED)
+    })
+
+    it('DELETE /api/tag/id/:id soft-deletes the tag and the relation still resolves it', async () => {
+        const res = await tagDelete(tag_id)
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        const tag = await tagGetById(relation.data.data.id_2)
+        expect(tag.status).toBe(200)
+        expect(typeof tag.data.data.deleted_at).toBe('number')
+    })
+
+    it('reaches the tagged relation record from the link', async () => {
+        const relation = await relationGetById(relation_id)
+        const target = await relationGetById(relation.data.data.id_1)
+        expect(target.status).toBe(200)
+        expect(target.data.data.note).toBe(SCAFFOLDING_NOTE)
+    })
+
+    afterAll(async () => {
+        await relationDelete(relation_id)
+        await relationDelete(related_relation_id)
+    })
+})
+
+describe('tag x tag — the six tag routes with a live relation', () => {
+    const TAG = { name: `rel-tag-${RUN}`, metadata: '{"related_to":"tag"}' }
+    const ANTECEDENT = { name: `rel-tag-antecedent-${RUN}`, metadata: '{}' }
+    const RENAMED = `rel-tag-renamed-${RUN}`
+    const NOTE = `relation-test: tag <-> tag ${RUN}`
+
+    let tag_id = ''
+    let antecedent_id = ''
+    let relation_id = ''
+
+    beforeAll(async () => {
+        // Scaffolding: the antecedent of the implication. Both sides of an "implies" relation
+        //  are always tags (Danbooru style: antecedent id_1 implies consequent id_2).
+        await tagPost(ANTECEDENT)
+        const res = await tagGetByName(ANTECEDENT.name)
+        antecedent_id = res.data.data.id
+    })
+
+    it('POST /api/tag/ creates the consequent tag', async () => {
+        const res = await tagPost(TAG)
+        expect(res.status).toBe(201)
+        expect(res.data.status).toBe('success')
+
+        const created = await tagGetByName(TAG.name)
+        tag_id = created.data.data.id
+        expect(typeof tag_id).toBe('number')
+    })
+
+    it('relates one tag to the other with an "implies" relation', async () => {
+        const res = await relationPost({
+            id_1: antecedent_id,
+            entity_1: 'tag',
+            id_2: tag_id,
+            entity_2: 'tag',
+            relation_type: 'implies',
+            note: NOTE
+        })
+        expect(res.status).toBe(201)
+
+        relation_id = await findRelationIdByNote(NOTE)
+        expect(typeof relation_id).toBe('number')
+    })
+
+    it('GET /api/tag/ lists both sides of the implication', async () => {
+        const res = await tagGetAll()
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(t => t.id === tag_id)).toBeDefined()
+        expect(res.data.data.find(t => t.id === antecedent_id)).toBeDefined()
+    })
+
+    it('GET /api/tag/id/:id resolves both ends of the relation', async () => {
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.entity_1).toBe('tag')
+        expect(relation.data.data.entity_2).toBe('tag')
+
+        const antecedent = await tagGetById(relation.data.data.id_1)
+        expect(antecedent.status).toBe(200)
+        expect(antecedent.data.data.name).toBe(ANTECEDENT.name)
+
+        const consequent = await tagGetById(relation.data.data.id_2)
+        expect(consequent.status).toBe(200)
+        expect(consequent.data.data.name).toBe(TAG.name)
+    })
+
+    it('GET /api/tag/name/:name resolves the same tag, whatever the case', async () => {
+        const res = await tagGetByName(TAG.name.toUpperCase())
+        expect(res.status).toBe(200)
+        expect(res.data.data.id).toBe(tag_id)
+    })
+
+    it('PUT /api/tag/update/ renames the consequent without breaking the implication', async () => {
+        const res = await tagUpdate({ id: tag_id, name: RENAMED, metadata: TAG.metadata })
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.id_1).toBe(antecedent_id)
+        expect(relation.data.data.id_2).toBe(tag_id)
+
+        const renamed = await tagGetById(relation.data.data.id_2)
+        expect(renamed.data.data.name).toBe(RENAMED)
+    })
+
+    it('DELETE /api/tag/id/:id soft-deletes the consequent and the antecedent stays untouched', async () => {
+        const res = await tagDelete(tag_id)
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+
+        const consequent = await tagGetById(relation.data.data.id_2)
+        expect(typeof consequent.data.data.deleted_at).toBe('number')
+
+        const antecedent = await tagGetById(relation.data.data.id_1)
+        expect(antecedent.data.data.deleted_at).toBeNull()
+    })
+
+    it('GET /api/relation/entity_id/:id finds the implication from the antecedent', async () => {
+        const res = await relationGetByEntityId(antecedent_id)
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(r => r.id === relation_id)).toBeDefined()
+    })
+
+    afterAll(async () => {
+        await relationDelete(relation_id)
+    })
+})
+
+describe('user x tag — the six tag routes with a live relation', () => {
+    const TAG = { name: `rel-user-${RUN}`, metadata: '{"related_to":"user"}' }
+    const RENAMED = `rel-user-renamed-${RUN}`
+    const NOTE = `relation-test: user <-> tag ${RUN}`
+
+    let tag_id = ''
+    let user_id = ''
+    let relation_id = ''
+
+    beforeAll(async () => {
+        // No endpoint returns a user id: it travels inside the session token. Logging in as
+        //  the seeded admin and reading the cookie is the only way to it through the public
+        //  surface, and it breaks loudly if the session ever stops carrying { id }.
+        const login = await axios.post(`${URL}/api/user/login/`, {
+            username: ADMIN_USERNAME,
+            password: ADMIN_DEFAULT_PASSWORD
+        }, ANY_STATUS)
+        const token = readCookie(login.headers['set-cookie'][0], SESSION_COOKIE_NAME)
+        user_id = verifyToken(token).id
+    })
+
+    it('resolves the admin user id out of the session cookie', () => {
+        expect(typeof user_id).toBe('number')
+    })
+
+    it('POST /api/tag/ creates the tag linked to the user', async () => {
+        const res = await tagPost(TAG)
+        expect(res.status).toBe(201)
+        expect(res.data.status).toBe('success')
+
+        const created = await tagGetByName(TAG.name)
+        tag_id = created.data.data.id
+        expect(typeof tag_id).toBe('number')
+    })
+
+    it('relates the user to the tag with a "linked" relation', async () => {
+        const res = await relationPost({
+            id_1: user_id,
+            entity_1: 'user',
+            id_2: tag_id,
+            entity_2: 'tag',
+            relation_type: 'linked',
+            note: NOTE
+        })
+        expect(res.status).toBe(201)
+
+        relation_id = await findRelationIdByNote(NOTE)
+        expect(typeof relation_id).toBe('number')
+    })
+
+    it('GET /api/tag/ lists the related tag', async () => {
+        const res = await tagGetAll()
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(t => t.id === tag_id)).toBeDefined()
+    })
+
+    it('GET /api/tag/id/:id resolves the tag the relation points at', async () => {
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.entity_1).toBe('user')
+        expect(relation.data.data.entity_2).toBe('tag')
+
+        const res = await tagGetById(relation.data.data.id_2)
+        expect(res.status).toBe(200)
+        expect(res.data.data.name).toBe(TAG.name)
+    })
+
+    it('GET /api/tag/name/:name resolves the same tag, whatever the case', async () => {
+        const res = await tagGetByName(TAG.name.toUpperCase())
+        expect(res.status).toBe(200)
+        expect(res.data.data.id).toBe(tag_id)
+    })
+
+    it('PUT /api/tag/update/ renames the tag without breaking the relation', async () => {
+        const res = await tagUpdate({ id: tag_id, name: RENAMED, metadata: TAG.metadata })
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.id_2).toBe(tag_id)
+
+        const renamed = await tagGetById(relation.data.data.id_2)
+        expect(renamed.data.data.name).toBe(RENAMED)
+    })
+
+    it('DELETE /api/tag/id/:id soft-deletes the tag and the relation still resolves it', async () => {
+        const res = await tagDelete(tag_id)
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        const tag = await tagGetById(relation.data.data.id_2)
+        expect(tag.status).toBe(200)
+        expect(typeof tag.data.data.deleted_at).toBe('number')
+    })
+
+    it('GET /api/relation/entity/user still lists the relation', async () => {
+        const res = await relationGetByEntity('user')
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(r => r.id === relation_id)).toBeDefined()
+    })
+
+    afterAll(async () => {
+        await relationDelete(relation_id)
     })
 })
