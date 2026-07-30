@@ -1,12 +1,11 @@
 const validators = require('./validators')
-const repository = require('./repository')
 const service = require('./service')
 
 const _ = {}
 
 _.getAll = async (req, res) => {
     try {
-        const data = repository.getAll()
+        const data = service.getAll()
         res.status(200).json({ status: 'success', description: 'tag retrieved', data })
     } catch (e) {
         console.error('Error:', e.message)
@@ -16,7 +15,7 @@ _.getAll = async (req, res) => {
 
 _.getById = async (req, res) => {
     try {
-        const data = repository.getById(req.params.id)
+        const data = service.getById(req.params.id)
         if (!data) return res.status(404).json({ status: 'failed', description: 'tag not found' })
         res.status(200).json({ status: 'success', description: 'tag retrieved', data })
     } catch (e) {
@@ -27,7 +26,7 @@ _.getById = async (req, res) => {
 
 _.getByName = async (req, res) => {
     try {
-        const data = repository.getByName(req.params.name)
+        const data = service.getByName(req.params.name)
         if (!data) return res.status(404).json({ status: 'failed', description: 'tag not found' })
         res.status(200).json({ status: 'success', description: 'tag retrieved', data })
     } catch (e) {
@@ -43,7 +42,7 @@ _.post = async (req, res) => {
         if (service.isNameTaken(tag.name)) {
             return res.status(409).json({ status: 'warning', description: 'tag already exists' })
         }
-        repository.post(tag)
+        service.create(tag)
         res.status(201).json({ status: 'success', description: 'tag created' })
     } catch (e) {
         console.error('Error:', e.message)
@@ -54,7 +53,7 @@ _.post = async (req, res) => {
 _.update = async (req, res) => {
     try {
         if (!validators.validateUpdate(req.body)) return res.status(400).json({ status: 'warning', description: 'tag invalid' })
-        const current = repository.getById(req.body.id)
+        const current = service.getById(req.body.id)
         const tag = service.buildForUpdate(current, req.body)
         if (!current) {
             return res.status(404).json({ status: 'failed', description: 'tag not found' })
@@ -62,7 +61,7 @@ _.update = async (req, res) => {
         if (service.isNameTakenByAnother(tag.name, tag.id)) {
             return res.status(409).json({ status: 'warning', description: 'tag already exists' })
         }
-        repository.update(tag)
+        service.update(tag)
         res.status(200).json({ status: 'success', description: 'tag updated' })
     } catch (e) {
         console.error('Error:', e.message)

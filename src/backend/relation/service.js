@@ -4,6 +4,17 @@ const { getSystemTime } = require('../core/time')
 
 const _ = {}
 
+// --------------------------------------------------------------------------------
+// Data access. This service is the only door to repository.js: a controller never
+//  reaches the repository itself, it always comes through here.
+// --------------------------------------------------------------------------------
+_.getAll = () => repository.getAll()
+_.getById = (id) => repository.getById(id)
+_.getByEntity = (entity) => repository.getByEntity(entity)
+_.getByEntityId = (entity_id) => repository.getByEntityId(entity_id)
+_.create = (relation) => repository.post(relation)
+_.update = (relation) => repository.update(relation)
+
 // Resolves the deleted_at value to store on update. The client sends a boolean, never a
 //  timestamp: true stamps the current system time, false clears the mark, and null (or an
 //  absent field) does nothing — it keeps whatever the stored row already had.

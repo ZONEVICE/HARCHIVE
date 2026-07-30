@@ -1,12 +1,11 @@
 const validators = require('./validators')
-const repository = require('./repository')
 const service = require('./service')
 
 const _ = {}
 
 _.getAll = async (req, res) => {
     try {
-        const data = repository.getAll()
+        const data = service.getAll()
         res.status(200).json({ status: 'success', description: 'metadata retrieved', data })
     } catch (e) {
         res.status(500).json({ status: 'failed', description: 'metadata retrieval failed' })
@@ -15,7 +14,7 @@ _.getAll = async (req, res) => {
 
 _.getById = async (req, res) => {
     try {
-        const data = repository.getById(req.params.id)
+        const data = service.getById(req.params.id)
         if (!data) return res.status(404).json({ status: 'failed', description: 'metadata not found' })
         res.status(200).json({ status: 'success', description: 'metadata retrieved', data })
     } catch (e) {
@@ -25,7 +24,7 @@ _.getById = async (req, res) => {
 
 _.getByName = async (req, res) => {
     try {
-        const data = repository.getByName(req.params.name)
+        const data = service.getByName(req.params.name)
         if (!data) return res.status(404).json({ status: 'failed', description: 'metadata not found' })
         res.status(200).json({ status: 'success', description: 'metadata retrieved', data })
     } catch (e) {
@@ -36,12 +35,12 @@ _.getByName = async (req, res) => {
 _.update = async (req, res) => {
     try {
         if (!validators.validateUpdate(req.body)) return res.status(400).json({ status: 'warning', description: 'metadata invalid' })
-        const current = repository.getById(req.body.id)
+        const current = service.getById(req.body.id)
         const metadata = service.buildForUpdate(current, req.body)
         if (service.isNameTakenByAnother(metadata.name, metadata.id)) {
             return res.status(409).json({ status: 'warning', description: 'metadata already exists' })
         }
-        repository.update(metadata)
+        service.update(metadata)
         res.status(200).json({ status: 'success', description: 'metadata updated' })
     } catch (e) {
         res.status(500).json({ status: 'failed', description: 'metadata update failed' })
@@ -55,7 +54,7 @@ _.post = async (req, res) => {
         if (service.isNameTaken(metadata.name)) {
             return res.status(409).json({ status: 'warning', description: 'metadata already exists' })
         }
-        repository.post(metadata)
+        service.create(metadata)
         res.status(201).json({ status: 'success', description: 'metadata created' })
     } catch (e) {
         res.status(500).json({ status: 'failed', description: 'metadata creation failed' })

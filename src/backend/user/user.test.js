@@ -182,7 +182,7 @@ describe('User Tests', () => {
 
         it('Change password requires an active session', async () => {
             try {
-                await axios.post(`${URL}/api/user/change_password/`, {
+                await axios.post(`${URL}/api/user/changepassword/`, {
                     old_password: 'newpassword',
                     new_password: 'finalpassword'
                 });
@@ -195,7 +195,7 @@ describe('User Tests', () => {
         it('Change password is successful', async () => {
             const session_cookie = await loginAndGetCookie('newpassword'); // set by the SetPassword test
 
-            const res = await axios.post(`${URL}/api/user/change_password/`, {
+            const res = await axios.post(`${URL}/api/user/changepassword/`, {
                 old_password: 'newpassword',
                 new_password: 'finalpassword'
             }, { headers: { Cookie: session_cookie } });
@@ -214,7 +214,7 @@ describe('User Tests', () => {
             const session_cookie = await loginAndGetCookie('finalpassword');
 
             try {
-                await axios.post(`${URL}/api/user/change_password/`, {
+                await axios.post(`${URL}/api/user/changepassword/`, {
                     old_password: 'wrongpassword',
                     new_password: 'e'
                 }, { headers: { Cookie: session_cookie } });
@@ -227,7 +227,7 @@ describe('User Tests', () => {
         it('Revert password to the default password', async () => {
             const session_cookie = await loginAndGetCookie('finalpassword');
 
-            const res = await axios.post(`${URL}/api/user/change_password/`, {
+            const res = await axios.post(`${URL}/api/user/changepassword/`, {
                 old_password: 'finalpassword',
                 new_password: ADMIN_DEFAULT_PASSWORD
             }, { headers: { Cookie: session_cookie } });

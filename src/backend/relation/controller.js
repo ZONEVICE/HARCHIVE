@@ -1,5 +1,4 @@
 const validators = require('./validators')
-const repository = require('./repository')
 const { SYSTEM_ENTITIES } = require('../core/constants')
 const { RELATION_TYPES } = require('./types-of-relation')
 const service = require('./service')
@@ -24,7 +23,7 @@ _.getTypes = async (req, res) => {
 
 _.getAll = async (req, res) => {
     try {
-        const data = repository.getAll()
+        const data = service.getAll()
         res.status(200).json({ status: 'success', description: 'relation retrieved', data })
     } catch (e) {
         res.status(500).json({ status: 'failed', description: 'relation retrieval failed' })
@@ -33,7 +32,7 @@ _.getAll = async (req, res) => {
 
 _.getById = async (req, res) => {
     try {
-        const data = repository.getById(req.params.id)
+        const data = service.getById(req.params.id)
         if (!data) return res.status(404).json({ status: 'failed', description: 'relation not found' })
         res.status(200).json({ status: 'success', description: 'relation retrieved', data })
     } catch (e) {
@@ -46,7 +45,7 @@ _.getByEntity = async (req, res) => {
         if (!validators.isValidEntity(req.params.entity)) {
             return res.status(400).json({ status: 'warning', description: 'relation entity invalid' })
         }
-        const data = repository.getByEntity(req.params.entity)
+        const data = service.getByEntity(req.params.entity)
         res.status(200).json({ status: 'success', description: 'relation retrieved', data })
     } catch (e) {
         res.status(500).json({ status: 'failed', description: 'relation retrieval failed' })
@@ -55,7 +54,7 @@ _.getByEntity = async (req, res) => {
 
 _.getByEntityId = async (req, res) => {
     try {
-        const data = repository.getByEntityId(req.params.id)
+        const data = service.getByEntityId(req.params.id)
         res.status(200).json({ status: 'success', description: 'relation retrieved', data })
     } catch (e) {
         res.status(500).json({ status: 'failed', description: 'relation retrieval failed' })
@@ -66,7 +65,7 @@ _.post = async (req, res) => {
     try {
         if (!validators.validatePost(req.body)) return res.status(400).json({ status: 'warning', description: 'relation invalid' })
         const relation = service.buildForCreate(req.body)
-        repository.post(relation)
+        service.create(relation)
         res.status(201).json({ status: 'success', description: 'relation created' })
     } catch (e) {
         res.status(500).json({ status: 'failed', description: 'relation creation failed' })
@@ -76,12 +75,12 @@ _.post = async (req, res) => {
 _.update = async (req, res) => {
     try {
         if (!validators.validateUpdate(req.body)) return res.status(400).json({ status: 'warning', description: 'relation invalid' })
-        const current = repository.getById(req.body.id)
+        const current = service.getById(req.body.id)
         const relation = service.buildForUpdate(current, req.body)
         if (!current) {
             return res.status(404).json({ status: 'failed', description: 'relation not found' })
         }
-        repository.update(relation)
+        service.update(relation)
         res.status(200).json({ status: 'success', description: 'relation updated' })
     } catch (e) {
         res.status(500).json({ status: 'failed', description: 'relation update failed' })
