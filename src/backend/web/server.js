@@ -19,5 +19,6 @@ require('../relation/routes')(app)
 require('../metadata/routes')(app)
 require('../file/routes')(app)
 require('../tag/routes')(app)
+require('../directory/routes')(app)
 
 module.exports = app

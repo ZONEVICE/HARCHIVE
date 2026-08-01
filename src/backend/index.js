@@ -25,6 +25,9 @@ relation_repository.createTable();
 const tag_repository = require('./tag/repository');
 tag_repository.createTable();
 
+const directory_repository = require('./directory/repository');
+directory_repository.createTable();
+
 // --------------------------------------------------------------------------------
 // Starts web server
 // --------------------------------------------------------------------------------

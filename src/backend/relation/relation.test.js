@@ -431,19 +431,17 @@ describe('directory x tag — the six tag routes with a live relation', () => {
     const RENAMED = `rel-directory-renamed-${RUN}`
     const NOTE = `relation-test: directory <-> tag ${RUN}`
 
-    // directory/ is not wired into the server yet: it has no table and no routes, so there is
-    //  no record to point at and the relation uses a placeholder id. The relation table holds
-    //  no foreign keys, so the link is stored all the same.
-    const directory_id = 1
+    const DIRECTORY_NAME = `rel-directory-${RUN}`
 
     let tag_id = ''
+    let directory_id = ''
     let relation_id = ''
 
-    it('the directory entity is still unwired (reminder to complete this block)', async () => {
-        // When directory gets its routes, replace directory_id above with a real record and
-        //  drop this test.
-        const res = await axios.get(`${URL}/api/directory/`, ANY_STATUS)
-        expect(res.status).toBe(404)
+    beforeAll(async () => {
+        // Scaffolding: the directory only exists to be the other side of the relation.
+        await axios.post(`${URL}/api/directory/`, { name: DIRECTORY_NAME }, ANY_STATUS)
+        const directories = await axios.get(`${URL}/api/directory/`, ANY_STATUS)
+        directory_id = directories.data.data.find(d => d.name === DIRECTORY_NAME).id
     })
 
     it('POST /api/tag/ creates the tag the directory will be tagged with', async () => {
@@ -520,8 +518,15 @@ describe('directory x tag — the six tag routes with a live relation', () => {
         expect(res.data.data.find(r => r.id === relation_id)).toBeDefined()
     })
 
+    it('GET /api/relation/entity_id/:id finds the relation from the directory side', async () => {
+        const res = await relationGetByEntityId(directory_id)
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(r => r.id === relation_id)).toBeDefined()
+    })
+
     afterAll(async () => {
         await relationDelete(relation_id)
+        await axios.delete(`${URL}/api/directory/id/${directory_id}`, ANY_STATUS)
     })
 })
 
@@ -1139,5 +1144,195 @@ describe('user x tag — the six tag routes with a live relation', () => {
 
     afterAll(async () => {
         await relationDelete(relation_id)
+    })
+})
+
+// --------------------------------------------------------------------------------
+// Directory x file associations.
+//
+// A directory holds nothing: there is no file_id column on directory, and no
+// directory_id column on file. What a directory contains, and what sits next to what,
+// is a relation record and nothing else — which is why the hierarchy of the file
+// system is tested here and not in directory.test.js.
+//
+// - contains : directional. The directory is always id_1, the thing inside is id_2.
+// - sibling  : symmetric. Both records share the same parent directory.
+//
+// Both entities are reached only through their own HTTP surface, never through their
+// internals, exactly like the tag blocks above.
+// --------------------------------------------------------------------------------
+
+const directoryPost = (body) => axios.post(`${URL}/api/directory/`, body, ANY_STATUS)
+const directoryGetAll = () => axios.get(`${URL}/api/directory/`, ANY_STATUS)
+const directoryGetById = (id) => axios.get(`${URL}/api/directory/id/${id}`, ANY_STATUS)
+const directoryDelete = (id) => axios.delete(`${URL}/api/directory/id/${id}`, ANY_STATUS)
+
+const filePost = (body) => axios.post(`${URL}/api/file/`, body, ANY_STATUS)
+const fileGetAll = () => axios.get(`${URL}/api/file/`, ANY_STATUS)
+const fileGetById = (id) => axios.get(`${URL}/api/file/id/${id}`, ANY_STATUS)
+const fileDelete = (id) => axios.delete(`${URL}/api/file/id/${id}`, ANY_STATUS)
+
+describe('directory x file — "contains" and "sibling" relations', () => {
+    // The scaffolding of this block: one parent directory holding a file, and a second
+    //  directory sitting next to that file inside the same parent. The names carry the
+    //  per-run suffix of the tag blocks, so the block finds its own rows whatever an
+    //  earlier run left behind.
+    const PARENT_NAME = `rel-parent-directory-${RUN}`
+    const SIBLING_NAME = `rel-sibling-directory-${RUN}`
+    const FILE_HASH = `rel-directory-file-hash-${RUN}`
+
+    const CONTAINS_NOTE = `relation-test: directory contains file ${RUN}`
+    const SIBLING_NOTE = `relation-test: directory sibling file ${RUN}`
+
+    let parent_id = ''
+    let sibling_id = ''
+    let file_id = ''
+    let contains_id = ''
+    let sibling_relation_id = ''
+
+    beforeAll(async () => {
+        await directoryPost({ name: PARENT_NAME })
+        await directoryPost({ name: SIBLING_NAME })
+        await filePost({
+            name: 'rel-directory-file.txt',
+            hash_256_sha: FILE_HASH,
+            relative_path: `/rel/${PARENT_NAME}/rel-directory-file.txt`,
+            extension: 'txt'
+        })
+
+        const directories = await directoryGetAll()
+        parent_id = directories.data.data.find(d => d.name === PARENT_NAME).id
+        sibling_id = directories.data.data.find(d => d.name === SIBLING_NAME).id
+
+        const files = await fileGetAll()
+        file_id = files.data.data.find(f => f.hash_256_sha === FILE_HASH).id
+    })
+
+    it('the scaffolding records exist on both sides', async () => {
+        expect(typeof parent_id).toBe('number')
+        expect(typeof sibling_id).toBe('number')
+        expect(typeof file_id).toBe('number')
+    })
+
+    it('relates the parent directory to the file with a "contains" relation', async () => {
+        const res = await relationPost({
+            id_1: parent_id,
+            entity_1: 'directory',
+            id_2: file_id,
+            entity_2: 'file',
+            relation_type: 'contains',
+            note: CONTAINS_NOTE
+        })
+        expect(res.status).toBe(201)
+        expect(res.data.status).toBe('success')
+
+        contains_id = await findRelationIdByNote(CONTAINS_NOTE)
+        expect(typeof contains_id).toBe('number')
+    })
+
+    it('relates the second directory to the file with a "sibling" relation', async () => {
+        const res = await relationPost({
+            id_1: sibling_id,
+            entity_1: 'directory',
+            id_2: file_id,
+            entity_2: 'file',
+            relation_type: 'sibling',
+            note: SIBLING_NOTE
+        })
+        expect(res.status).toBe(201)
+        expect(res.data.status).toBe('success')
+
+        sibling_relation_id = await findRelationIdByNote(SIBLING_NOTE)
+        expect(typeof sibling_relation_id).toBe('number')
+    })
+
+    it('stores the containment with the directory as id_1 and the file as id_2', async () => {
+        const res = await relationGetById(contains_id)
+        expect(res.status).toBe(200)
+        expect(res.data.data.relation_type).toBe('contains')
+        expect(res.data.data.entity_1).toBe('directory')
+        expect(res.data.data.id_1).toBe(parent_id)
+        expect(res.data.data.entity_2).toBe('file')
+        expect(res.data.data.id_2).toBe(file_id)
+    })
+
+    it('stores the sibling link between the same two entities', async () => {
+        const res = await relationGetById(sibling_relation_id)
+        expect(res.status).toBe(200)
+        expect(res.data.data.relation_type).toBe('sibling')
+        expect(res.data.data.entity_1).toBe('directory')
+        expect(res.data.data.id_1).toBe(sibling_id)
+        expect(res.data.data.entity_2).toBe('file')
+        expect(res.data.data.id_2).toBe(file_id)
+    })
+
+    it('resolves both sides of the containment through their own routes', async () => {
+        const relation = await relationGetById(contains_id)
+
+        const directory = await directoryGetById(relation.data.data.id_1)
+        expect(directory.status).toBe(200)
+        expect(directory.data.data.name).toBe(PARENT_NAME)
+
+        const file = await fileGetById(relation.data.data.id_2)
+        expect(file.status).toBe(200)
+        expect(file.data.data.hash_256_sha).toBe(FILE_HASH)
+    })
+
+    it('GET /api/relation/entity_id/:id lists both relations from the file side', async () => {
+        const res = await relationGetByEntityId(file_id)
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(r => r.id === contains_id)).toBeDefined()
+        expect(res.data.data.find(r => r.id === sibling_relation_id)).toBeDefined()
+    })
+
+    it('GET /api/relation/entity_id/:id lists only the containment from the parent side', async () => {
+        const res = await relationGetByEntityId(parent_id)
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(r => r.id === contains_id)).toBeDefined()
+        expect(res.data.data.find(r => r.id === sibling_relation_id)).toBeUndefined()
+    })
+
+    it('GET /api/relation/entity/:entity lists them from both entity names', async () => {
+        const from_directory = await relationGetByEntity('directory')
+        expect(from_directory.status).toBe(200)
+        expect(from_directory.data.data.find(r => r.id === contains_id)).toBeDefined()
+        expect(from_directory.data.data.find(r => r.id === sibling_relation_id)).toBeDefined()
+
+        const from_file = await relationGetByEntity('file')
+        expect(from_file.status).toBe(200)
+        expect(from_file.data.data.find(r => r.id === contains_id)).toBeDefined()
+        expect(from_file.data.data.find(r => r.id === sibling_relation_id)).toBeDefined()
+    })
+
+    it('DELETE /api/directory/id/:id soft-deletes the parent and the containment still resolves it', async () => {
+        const res = await directoryDelete(parent_id)
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(contains_id)
+        expect(relation.data.data.deleted_at).toBeNull()
+
+        const directory = await directoryGetById(relation.data.data.id_1)
+        expect(directory.status).toBe(200)
+        expect(typeof directory.data.data.deleted_at).toBe('number')
+    })
+
+    it('DELETE /api/file/id/:id soft-deletes the file and both relations still resolve it', async () => {
+        const res = await fileDelete(file_id)
+        expect(res.status).toBe(200)
+
+        const contains = await relationGetById(contains_id)
+        const sibling = await relationGetById(sibling_relation_id)
+        expect(contains.data.data.id_2).toBe(file_id)
+        expect(sibling.data.data.id_2).toBe(file_id)
+
+        const file = await fileGetById(file_id)
+        expect(file.status).toBe(200)
+        expect(typeof file.data.data.deleted_at).toBe('number')
+    })
+
+    afterAll(async () => {
+        await relationDelete(contains_id)
+        await relationDelete(sibling_relation_id)
+        await directoryDelete(sibling_id)
     })
 })

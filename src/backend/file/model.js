@@ -1,5 +1,4 @@
 class File {
-    // The id is assigned by the database (INTEGER PRIMARY KEY) on insert, so it starts null.
     #id = null
     #name = ''
     #hash_256_sha = ''
