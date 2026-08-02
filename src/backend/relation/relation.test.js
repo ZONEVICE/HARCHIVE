@@ -8,6 +8,8 @@ const { readCookie } = require('../core/cookies')
 const { verifyToken } = require('../core/jwt')
 const { RELATION_TYPES } = require('./types-of-relation')
 const relation_repository = require('./repository')
+const permission_service = require('../permission/service')
+const { ADMINISTRATOR_PERMISSION_NAME } = require('../permission/util')
 
 // Every request is read as data, never as an exception, so each test asserts the status code
 //  itself instead of branching on a thrown error.
@@ -46,6 +48,12 @@ async function findRelationIdByNote(note) {
 
 beforeAll(() => {
     relation_repository.deleteAll()
+
+    // The wipe above also removes the admin user -> administrator permission link that
+    //  index.js creates at startup, and nothing re-creates it until the next boot. Calling the
+    //  startup function again puts the invariant back, so the authorization block below tests
+    //  the real seeded link and the database is left sane for the run after this one.
+    permission_service.linkAdminUser()
 })
 
 describe('GET /api/relation/entities/', () => {
@@ -411,7 +419,13 @@ describe('System entity catalogue coverage', () => {
     // Guard for the blocks below: each entity of the catalogue has its own block. When an
     //  entity is added, removed or renamed in SYSTEM_ENTITIES this test fails, as a reminder
     //  to write (or retire) the matching block instead of silently losing the coverage.
-    const COVERED_ENTITIES = ['directory', 'file', 'metadata', 'profile', 'relation', 'tag', 'user']
+    const TAG_COVERED_ENTITIES = ['directory', 'file', 'metadata', 'profile', 'relation', 'tag', 'user']
+
+    // permission is deliberately not one of them: it is never tagged, it is only ever related
+    //  to a user, so its coverage is the "user x permission" block at the bottom of this file
+    //  instead of a tag block. Keep it listed here — the guard is about every entity of the
+    //  catalogue being covered *somewhere*, not about every entity being tagged.
+    const COVERED_ENTITIES = [...TAG_COVERED_ENTITIES, 'permission']
 
     it('SYSTEM_ENTITIES holds exactly the entities covered by the blocks below', () => {
         expect([...SYSTEM_ENTITIES].sort()).toEqual([...COVERED_ENTITIES].sort())
@@ -1289,7 +1303,16 @@ describe('directory x file — "contains" and "sibling" relations', () => {
         const res = await relationGetByEntityId(parent_id)
         expect(res.status).toBe(200)
         expect(res.data.data.find(r => r.id === contains_id)).toBeDefined()
-        expect(res.data.data.find(r => r.id === sibling_relation_id)).toBeUndefined()
+
+        // The route matches on the id alone, whatever entity owns it: each table has its own
+        //  INTEGER PRIMARY KEY sequence, so a directory id and a file id collide as a matter of
+        //  course and the sibling link surfaces here through the file on its other side. What
+        //  the parent is really not part of is the sibling link *as a directory*, which is what
+        //  this asserts — matching on the bare id would only pass while the ids happened to differ.
+        const sibling_from_parent = res.data.data.find(r =>
+            r.id === sibling_relation_id && r.entity_1 === 'directory' && r.id_1 === parent_id
+        )
+        expect(sibling_from_parent).toBeUndefined()
     })
 
     it('GET /api/relation/entity/:entity lists them from both entity names', async () => {
@@ -1334,5 +1357,374 @@ describe('directory x file — "contains" and "sibling" relations', () => {
         await relationDelete(contains_id)
         await relationDelete(sibling_relation_id)
         await directoryDelete(sibling_id)
+    })
+})
+
+// --------------------------------------------------------------------------------
+// User x permission associations.
+//
+// What a user is allowed to do is a permission record, and the two are joined by a
+// relation of type "linked" — the user is id_1, the permission is id_2. There is no
+// permission_id column on user, so the whole authorization chain is a relation and
+// belongs in this file.
+//
+// These tests reach permission/service.can() directly, which no other block does.
+// The HTTP surface cannot show it: the authorize(verb) guard exists in
+// web/middleware.js but no route lists it yet, so the resolution is only observable
+// from the backend side. What is asserted is exactly what the guard will ask.
+// --------------------------------------------------------------------------------
+
+// One wrapper per permission route this block needs. Like every other entity here, permission
+//  is reached only through its own HTTP surface, never through its internals.
+const permissionPost = (body) => axios.post(`${URL}/api/permission/`, body, ANY_STATUS)
+const permissionGetById = (id) => axios.get(`${URL}/api/permission/id/${id}`, ANY_STATUS)
+const permissionGetByName = (name) => axios.get(`${URL}/api/permission/name/${encodeURIComponent(name)}`, ANY_STATUS)
+const permissionUpdate = (body) => axios.put(`${URL}/api/permission/update/`, body, ANY_STATUS)
+const permissionDelete = (id) => axios.delete(`${URL}/api/permission/id/${id}`, ANY_STATUS)
+
+describe('user x permission — the link that grants rights', () => {
+    const PERMISSION_NAME = `rel-user-permission-${RUN}`
+    const RENAMED_PERMISSION = `rel-user-permission-renamed-${RUN}`
+    const SECOND_PERMISSION_NAME = `rel-user-permission-second-${RUN}`
+    const TAG_NAME = `rel-user-permission-tag-${RUN}`
+
+    const NOTE = `relation-test: user <-> permission ${RUN}`
+    const SECOND_NOTE = `relation-test: second user <-> permission ${RUN}`
+    const DISTRACTION_NOTE = `relation-test: user <-> tag, not a permission ${RUN}`
+
+    // Two user ids that no account owns. Nothing in the chain requires the user row to exist:
+    //  the link is resolved from the relation table, so a synthetic id is enough to drive the
+    //  rules without touching the seeded admin account, which the block above already uses.
+    const USER_ID = 900001
+    const SECOND_USER_ID = 900002
+
+    let admin_user_id = ''
+    let permission_id = ''
+    let second_permission_id = ''
+    let tag_id = ''
+    let relation_id = ''
+    let second_relation_id = ''
+    let distraction_id = ''
+
+    // Every right denied. It is the answer for a user with no link, with a trashed link and
+    //  with a trashed permission, and each of those is asserted separately below.
+    const expectEverythingDenied = (user_id) => {
+        expect(permission_service.can(user_id, 'read')).toBe(false)
+        expect(permission_service.can(user_id, 'create')).toBe(false)
+        expect(permission_service.can(user_id, 'edit')).toBe(false)
+        expect(permission_service.can(user_id, 'delete')).toBe(false)
+    }
+
+    // The update endpoint replaces the whole record, so changing one field means sending the
+    //  others back untouched. These two rebuild the body from the stored row.
+    const updateRelation = async (id, changes) => {
+        const current = await relationGetById(id)
+        const relation = current.data.data
+        return axios.put(`${URL}/api/relation/update/`, {
+            id: relation.id,
+            id_1: relation.id_1,
+            entity_1: relation.entity_1,
+            id_2: relation.id_2,
+            entity_2: relation.entity_2,
+            relation_type: relation.relation_type,
+            note: relation.note,
+            ...changes
+        }, ANY_STATUS)
+    }
+
+    const updatePermission = async (id, changes) => {
+        const current = await permissionGetById(id)
+        const permission = current.data.data
+        return permissionUpdate({
+            id: permission.id,
+            name: permission.name,
+            can_read: permission.can_read,
+            can_create: permission.can_create,
+            can_edit: permission.can_edit,
+            can_delete: permission.can_delete,
+            ...changes
+        })
+    }
+
+    beforeAll(async () => {
+        // No endpoint returns a user id: it travels inside the session token, so logging in as
+        //  the seeded admin and reading the cookie is the only way to it through the public
+        //  surface.
+        const login = await axios.post(`${URL}/api/user/login/`, {
+            username: ADMIN_USERNAME,
+            password: ADMIN_DEFAULT_PASSWORD
+        }, ANY_STATUS)
+        const token = readCookie(login.headers['set-cookie'][0], SESSION_COOKIE_NAME)
+        admin_user_id = verifyToken(token).id
+    })
+
+    // ----------------------------------------------------------------------------
+    // The link seeded at startup.
+    // ----------------------------------------------------------------------------
+
+    it('resolves the admin user id out of the session cookie', () => {
+        expect(typeof admin_user_id).toBe('number')
+    })
+
+    it('startup left a "linked" relation from the admin user to a permission', async () => {
+        const res = await relationGetByEntityId(admin_user_id)
+        expect(res.status).toBe(200)
+
+        const link = res.data.data.find(r => r.entity_1 === 'user' && r.entity_2 === 'permission' && r.id_1 === admin_user_id)
+        expect(link).toBeDefined()
+        expect(link.relation_type).toBe('linked')
+        expect(link.deleted_at).toBeNull()
+    })
+
+    it('GET /api/permission/id/:id resolves the administrator permission from that link', async () => {
+        const res = await relationGetByEntityId(admin_user_id)
+        const link = res.data.data.find(r => r.entity_1 === 'user' && r.entity_2 === 'permission' && r.id_1 === admin_user_id)
+
+        const permission = await permissionGetById(link.id_2)
+        expect(permission.status).toBe(200)
+        expect(permission.data.data.name).toBe(ADMINISTRATOR_PERMISSION_NAME)
+        expect(permission.data.data.deleted_at).toBeNull()
+    })
+
+    it('GET /api/relation/entity/permission lists the seeded link', async () => {
+        const res = await relationGetByEntity('permission')
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(r => r.entity_1 === 'user' && r.id_1 === admin_user_id)).toBeDefined()
+    })
+
+    it('grants the admin user all four verbs', () => {
+        expect(permission_service.can(admin_user_id, 'read')).toBe(true)
+        expect(permission_service.can(admin_user_id, 'create')).toBe(true)
+        expect(permission_service.can(admin_user_id, 'edit')).toBe(true)
+        expect(permission_service.can(admin_user_id, 'delete')).toBe(true)
+    })
+
+    it('denies a verb that is not one of the four', () => {
+        expect(permission_service.can(admin_user_id, 'download')).toBe(false)
+        expect(permission_service.can(admin_user_id, '')).toBe(false)
+        expect(permission_service.can(admin_user_id, undefined)).toBe(false)
+    })
+
+    // ----------------------------------------------------------------------------
+    // A user with no link at all.
+    // ----------------------------------------------------------------------------
+
+    it('resolves no permission for a user nothing points at', () => {
+        expect(permission_service.getByUserId(USER_ID)).toBeNull()
+    })
+
+    it('denies every verb to a user with no permission attached', () => {
+        expectEverythingDenied(USER_ID)
+    })
+
+    it('ignores a relation from the same user that does not point at a permission', async () => {
+        // The user is now on one side of a live relation, but it is a tag link. Rights come
+        //  from a permission and nothing else, so this must still grant nothing.
+        await tagPost({ name: TAG_NAME, metadata: '{}' })
+        const tag = await tagGetByName(TAG_NAME)
+        tag_id = tag.data.data.id
+
+        const res = await relationPost({
+            id_1: USER_ID,
+            entity_1: 'user',
+            id_2: tag_id,
+            entity_2: 'tag',
+            relation_type: 'linked',
+            note: DISTRACTION_NOTE
+        })
+        expect(res.status).toBe(201)
+
+        distraction_id = await findRelationIdByNote(DISTRACTION_NOTE)
+        expect(typeof distraction_id).toBe('number')
+
+        expect(permission_service.getByUserId(USER_ID)).toBeNull()
+        expectEverythingDenied(USER_ID)
+    })
+
+    // ----------------------------------------------------------------------------
+    // A link built by hand, and everything that can happen to it afterwards.
+    // ----------------------------------------------------------------------------
+
+    it('POST /api/permission/ creates the permission the user will be linked to', async () => {
+        const res = await permissionPost({
+            name: PERMISSION_NAME,
+            can_read: true,
+            can_create: false,
+            can_edit: false,
+            can_delete: false
+        })
+        expect(res.status).toBe(201)
+
+        const created = await permissionGetByName(PERMISSION_NAME)
+        permission_id = created.data.data.id
+        expect(typeof permission_id).toBe('number')
+    })
+
+    it('relates the user to the permission with a "linked" relation', async () => {
+        const res = await relationPost({
+            id_1: USER_ID,
+            entity_1: 'user',
+            id_2: permission_id,
+            entity_2: 'permission',
+            relation_type: 'linked',
+            note: NOTE
+        })
+        expect(res.status).toBe(201)
+
+        relation_id = await findRelationIdByNote(NOTE)
+        expect(typeof relation_id).toBe('number')
+    })
+
+    it('stores the user as id_1 and the permission as id_2', async () => {
+        const res = await relationGetById(relation_id)
+        expect(res.status).toBe(200)
+        expect(res.data.data.entity_1).toBe('user')
+        expect(res.data.data.id_1).toBe(USER_ID)
+        expect(res.data.data.entity_2).toBe('permission')
+        expect(res.data.data.id_2).toBe(permission_id)
+        expect(res.data.data.relation_type).toBe('linked')
+    })
+
+    it('resolves the permission through the link', () => {
+        const permission = permission_service.getByUserId(USER_ID)
+        expect(permission).not.toBeNull()
+        expect(permission.id).toBe(permission_id)
+        expect(permission.name).toBe(PERMISSION_NAME)
+    })
+
+    it('grants exactly the verbs the linked permission carries', () => {
+        expect(permission_service.can(USER_ID, 'read')).toBe(true)
+        expect(permission_service.can(USER_ID, 'create')).toBe(false)
+        expect(permission_service.can(USER_ID, 'edit')).toBe(false)
+        expect(permission_service.can(USER_ID, 'delete')).toBe(false)
+    })
+
+    it('GET /api/relation/entity_id/:id finds the link from the user side', async () => {
+        const res = await relationGetByEntityId(USER_ID)
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(r => r.id === relation_id)).toBeDefined()
+    })
+
+    it('GET /api/relation/entity_id/:id finds the link from the permission side', async () => {
+        const res = await relationGetByEntityId(permission_id)
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(r => r.id === relation_id)).toBeDefined()
+    })
+
+    it('takes a flag change into account straight away, with no new link and no new session', async () => {
+        // The flags are read from the database on every check, never carried in the session
+        //  token: this is what makes a permission change effective without a re-login.
+        const res = await updatePermission(permission_id, { can_create: true, can_edit: true })
+        expect(res.status).toBe(200)
+
+        expect(permission_service.can(USER_ID, 'read')).toBe(true)
+        expect(permission_service.can(USER_ID, 'create')).toBe(true)
+        expect(permission_service.can(USER_ID, 'edit')).toBe(true)
+        expect(permission_service.can(USER_ID, 'delete')).toBe(false)
+
+        const link = await relationGetById(relation_id)
+        expect(link.data.data.id_2).toBe(permission_id)
+    })
+
+    it('PUT /api/permission/update/ renames the permission without breaking the link', async () => {
+        const res = await updatePermission(permission_id, { name: RENAMED_PERMISSION })
+        expect(res.status).toBe(200)
+
+        const link = await relationGetById(relation_id)
+        expect(link.data.data.id_2).toBe(permission_id)
+
+        const permission = permission_service.getByUserId(USER_ID)
+        expect(permission.name).toBe(RENAMED_PERMISSION)
+        expect(permission_service.can(USER_ID, 'read')).toBe(true)
+    })
+
+    it('revokes every right when the link is soft-deleted', async () => {
+        const res = await relationDelete(relation_id)
+        expect(res.status).toBe(200)
+
+        // The permission itself is untouched — it is the link that is gone.
+        const permission = await permissionGetById(permission_id)
+        expect(permission.data.data.deleted_at).toBeNull()
+
+        expect(permission_service.getByUserId(USER_ID)).toBeNull()
+        expectEverythingDenied(USER_ID)
+    })
+
+    it('gives the rights back when the link is restored', async () => {
+        const res = await updateRelation(relation_id, { deleted_at: false })
+        expect(res.status).toBe(200)
+
+        expect(permission_service.can(USER_ID, 'read')).toBe(true)
+        expect(permission_service.can(USER_ID, 'create')).toBe(true)
+    })
+
+    it('revokes every right when the permission is soft-deleted, link intact', async () => {
+        const res = await permissionDelete(permission_id)
+        expect(res.status).toBe(200)
+
+        // The link is still live and still readable: it is the permission that is in the trash.
+        const link = await relationGetById(relation_id)
+        expect(link.data.data.deleted_at).toBeNull()
+        expect(link.data.data.id_2).toBe(permission_id)
+
+        expect(permission_service.getByUserId(USER_ID)).toBeNull()
+        expectEverythingDenied(USER_ID)
+    })
+
+    it('gives the rights back when the permission is restored', async () => {
+        const res = await updatePermission(permission_id, { deleted_at: false })
+        expect(res.status).toBe(200)
+
+        expect(permission_service.can(USER_ID, 'read')).toBe(true)
+        expect(permission_service.can(USER_ID, 'create')).toBe(true)
+        expect(permission_service.can(USER_ID, 'delete')).toBe(false)
+    })
+
+    it('changes the rights when the link is pointed at another permission', async () => {
+        const created = await permissionPost({
+            name: SECOND_PERMISSION_NAME,
+            can_read: true,
+            can_create: true,
+            can_edit: true,
+            can_delete: true
+        })
+        expect(created.status).toBe(201)
+
+        const second = await permissionGetByName(SECOND_PERMISSION_NAME)
+        second_permission_id = second.data.data.id
+
+        const res = await updateRelation(relation_id, { id_2: second_permission_id })
+        expect(res.status).toBe(200)
+
+        expect(permission_service.getByUserId(USER_ID).id).toBe(second_permission_id)
+        expect(permission_service.can(USER_ID, 'delete')).toBe(true)
+    })
+
+    it('is a role, not a per-user record: a second user linked to the same row gets the same rights', async () => {
+        const res = await relationPost({
+            id_1: SECOND_USER_ID,
+            entity_1: 'user',
+            id_2: second_permission_id,
+            entity_2: 'permission',
+            relation_type: 'linked',
+            note: SECOND_NOTE
+        })
+        expect(res.status).toBe(201)
+
+        second_relation_id = await findRelationIdByNote(SECOND_NOTE)
+        expect(typeof second_relation_id).toBe('number')
+
+        expect(permission_service.getByUserId(SECOND_USER_ID).id).toBe(second_permission_id)
+        expect(permission_service.can(SECOND_USER_ID, 'delete')).toBe(true)
+
+        // And revoking one user's link leaves the other one alone.
+        await relationDelete(second_relation_id)
+        expectEverythingDenied(SECOND_USER_ID)
+        expect(permission_service.can(USER_ID, 'delete')).toBe(true)
+    })
+
+    afterAll(async () => {
+        await relationDelete(relation_id)
+        await relationDelete(distraction_id)
     })
 })

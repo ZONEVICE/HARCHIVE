@@ -15,6 +15,11 @@ _.createAdminUser = () => {
     repository.Post(user)
 }
 
+// The seeded admin account, or null when it is missing. Public because other entities need to
+//  reach it through this surface instead of the repository: permission/service.linkAdminUser
+//  grants it the administrator permission at startup.
+_.getAdminUser = () => repository.LoadAdminUser()
+
 // Passwords are stored in plain text for now, so verification is a direct comparison.
 //  Returns null when the username does not exist or when the password does not match,
 //  the same answer in both cases so nobody can probe which usernames are registered.

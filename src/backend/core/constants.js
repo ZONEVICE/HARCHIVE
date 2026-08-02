@@ -6,5 +6,5 @@ module.exports = {
     ADMIN_USERNAME: 'VICE',
     ADMIN_DEFAULT_PASSWORD: 'changeme',
     SESSION_COOKIE_NAME: 'harchive_session',
-    SYSTEM_ENTITIES: ['directory', 'file', 'metadata', 'profile', 'relation', 'tag', 'user']
+    SYSTEM_ENTITIES: ['directory', 'file', 'metadata', 'permission', 'profile', 'relation', 'tag', 'user']
 }

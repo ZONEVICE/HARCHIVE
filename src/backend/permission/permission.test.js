@@ -1,0 +1,349 @@
+const { PORT } = require('../core/env')
+const URL = `http://localhost:${PORT}`
+
+const axios = require('axios')
+
+const { ADMINISTRATOR_PERMISSION_NAME, GUEST_PERMISSION_NAME } = require('./util')
+
+// Every request is read as data, never as an exception, so each test asserts the status code
+//  itself instead of branching on a thrown error.
+const ANY_STATUS = { validateStatus: () => true }
+
+// This file deliberately does NOT wipe the permission table, unlike file, tag or directory.
+//  The two default rows are seed data created once at startup: deleting them would leave the
+//  running server without an administrator until the next restart. The records of this run
+//  carry a per-run suffix instead, because the name column is UNIQUE.
+const RUN = Date.now()
+
+const SAMPLE = {
+    name: `test-permission-${RUN}`,
+    can_read: true,
+    can_create: true,
+    can_edit: false,
+    can_delete: false
+}
+
+let created_id = ''
+
+describe('POST /api/permission/', () => {
+    it('returns 400 warning when the name is not a string', async () => {
+        const res = await axios.post(`${URL}/api/permission/`, { ...SAMPLE, name: 123 }, ANY_STATUS)
+        expect(res.status).toBe(400)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('permission invalid')
+    })
+
+    it('returns 400 warning when a flag is not a boolean', async () => {
+        const res = await axios.post(`${URL}/api/permission/`, { ...SAMPLE, can_read: 'yes' }, ANY_STATUS)
+        expect(res.status).toBe(400)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('permission invalid')
+    })
+
+    it('returns 201 on valid permission', async () => {
+        const res = await axios.post(`${URL}/api/permission/`, SAMPLE, ANY_STATUS)
+        expect(res.status).toBe(201)
+        expect(res.data.status).toBe('success')
+        expect(res.data.description).toBe('permission created')
+    })
+
+    it('returns 409 warning when the name is already taken', async () => {
+        const res = await axios.post(`${URL}/api/permission/`, SAMPLE, ANY_STATUS)
+        expect(res.status).toBe(409)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('permission already exists')
+    })
+
+    it('returns 409 warning when the name differs only in case', async () => {
+        const res = await axios.post(`${URL}/api/permission/`, { ...SAMPLE, name: SAMPLE.name.toUpperCase() }, ANY_STATUS)
+        expect(res.status).toBe(409)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('permission already exists')
+    })
+
+    it('returns 201 when the flags are omitted, and stores them all as false', async () => {
+        const res = await axios.post(`${URL}/api/permission/`, { name: `test-permission-bare-${RUN}` }, ANY_STATUS)
+        expect(res.status).toBe(201)
+
+        const bare = await axios.get(`${URL}/api/permission/name/test-permission-bare-${RUN}`, ANY_STATUS)
+        expect(bare.data.data.can_read).toBe(false)
+        expect(bare.data.data.can_create).toBe(false)
+        expect(bare.data.data.can_edit).toBe(false)
+        expect(bare.data.data.can_delete).toBe(false)
+    })
+})
+
+describe('GET /api/permission/', () => {
+    it('returns 200 with a data array', async () => {
+        const res = await axios.get(`${URL}/api/permission/`, ANY_STATUS)
+        expect(res.status).toBe(200)
+        expect(res.data.status).toBe('success')
+        expect(Array.isArray(res.data.data)).toBe(true)
+
+        created_id = res.data.data.find(p => p.name === SAMPLE.name).id
+        expect(typeof created_id).toBe('number')
+    })
+
+    it('lists the two default permissions created at startup', async () => {
+        const res = await axios.get(`${URL}/api/permission/`, ANY_STATUS)
+        expect(res.data.data.find(p => p.name === ADMINISTRATOR_PERMISSION_NAME)).toBeDefined()
+        expect(res.data.data.find(p => p.name === GUEST_PERMISSION_NAME)).toBeDefined()
+    })
+})
+
+describe('GET /api/permission/id/:id', () => {
+    it('returns 200 with the permission when found', async () => {
+        const res = await axios.get(`${URL}/api/permission/id/${created_id}`, ANY_STATUS)
+        expect(res.status).toBe(200)
+        expect(res.data.status).toBe('success')
+        expect(res.data.data.id).toBe(created_id)
+        expect(res.data.data.name).toBe(SAMPLE.name)
+    })
+
+    it('answers the four flags as real booleans, never as 0 and 1', async () => {
+        const res = await axios.get(`${URL}/api/permission/id/${created_id}`, ANY_STATUS)
+        expect(res.data.data.can_read).toBe(true)
+        expect(res.data.data.can_create).toBe(true)
+        expect(res.data.data.can_edit).toBe(false)
+        expect(res.data.data.can_delete).toBe(false)
+    })
+
+    it('returns 404 when the id does not exist', async () => {
+        const res = await axios.get(`${URL}/api/permission/id/nonexistent`, ANY_STATUS)
+        expect(res.status).toBe(404)
+        expect(res.data.status).toBe('failed')
+        expect(res.data.description).toBe('permission not found')
+    })
+})
+
+describe('GET /api/permission/name/:name', () => {
+    it('returns 200 with the permission when found', async () => {
+        const res = await axios.get(`${URL}/api/permission/name/${SAMPLE.name}`, ANY_STATUS)
+        expect(res.status).toBe(200)
+        expect(res.data.status).toBe('success')
+        expect(res.data.data.id).toBe(created_id)
+    })
+
+    it('resolves the same permission whatever the case', async () => {
+        const res = await axios.get(`${URL}/api/permission/name/${SAMPLE.name.toUpperCase()}`, ANY_STATUS)
+        expect(res.status).toBe(200)
+        expect(res.data.data.id).toBe(created_id)
+    })
+
+    it('returns 404 when the name does not exist', async () => {
+        const res = await axios.get(`${URL}/api/permission/name/not-a-real-permission-${RUN}`, ANY_STATUS)
+        expect(res.status).toBe(404)
+        expect(res.data.status).toBe('failed')
+        expect(res.data.description).toBe('permission not found')
+    })
+})
+
+describe('the default permissions seeded at startup', () => {
+    it('grants the administrator all four verbs', async () => {
+        const res = await axios.get(`${URL}/api/permission/name/${ADMINISTRATOR_PERMISSION_NAME}`, ANY_STATUS)
+        expect(res.status).toBe(200)
+        expect(res.data.data.can_read).toBe(true)
+        expect(res.data.data.can_create).toBe(true)
+        expect(res.data.data.can_edit).toBe(true)
+        expect(res.data.data.can_delete).toBe(true)
+        expect(res.data.data.deleted_at).toBeNull()
+    })
+
+    it('grants the guest reading and nothing else', async () => {
+        const res = await axios.get(`${URL}/api/permission/name/${GUEST_PERMISSION_NAME}`, ANY_STATUS)
+        expect(res.status).toBe(200)
+        expect(res.data.data.can_read).toBe(true)
+        expect(res.data.data.can_create).toBe(false)
+        expect(res.data.data.can_edit).toBe(false)
+        expect(res.data.data.can_delete).toBe(false)
+        expect(res.data.data.deleted_at).toBeNull()
+    })
+})
+
+describe('PUT /api/permission/update/', () => {
+    it('returns 400 warning on invalid body', async () => {
+        const res = await axios.put(`${URL}/api/permission/update/`, { ...SAMPLE, id: created_id, name: 123 }, ANY_STATUS)
+        expect(res.status).toBe(400)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('permission invalid')
+    })
+
+    it('returns 400 warning when a flag is missing (an update replaces the whole record)', async () => {
+        const partial = { id: created_id, name: SAMPLE.name, can_read: true, can_create: true, can_edit: false }
+        const res = await axios.put(`${URL}/api/permission/update/`, partial, ANY_STATUS)
+        expect(res.status).toBe(400)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('permission invalid')
+    })
+
+    it('returns 404 when the permission does not exist', async () => {
+        const res = await axios.put(`${URL}/api/permission/update/`, { ...SAMPLE, id: 999999 }, ANY_STATUS)
+        expect(res.status).toBe(404)
+        expect(res.data.status).toBe('failed')
+        expect(res.data.description).toBe('permission not found')
+    })
+
+    it('returns 409 warning when the new name belongs to another permission', async () => {
+        const res = await axios.put(`${URL}/api/permission/update/`, { ...SAMPLE, id: created_id, name: ADMINISTRATOR_PERMISSION_NAME }, ANY_STATUS)
+        expect(res.status).toBe(409)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('permission already exists')
+    })
+
+    it('returns 200 when the permission keeps its own name', async () => {
+        const res = await axios.put(`${URL}/api/permission/update/`, { ...SAMPLE, id: created_id }, ANY_STATUS)
+        expect(res.status).toBe(200)
+        expect(res.data.status).toBe('success')
+        expect(res.data.description).toBe('permission updated')
+    })
+
+    it('returns 200 on valid update and stores the new flags', async () => {
+        const res = await axios.put(`${URL}/api/permission/update/`, {
+            id: created_id,
+            name: `test-permission-renamed-${RUN}`,
+            can_read: true,
+            can_create: false,
+            can_edit: true,
+            can_delete: true
+        }, ANY_STATUS)
+        expect(res.status).toBe(200)
+
+        const updated = await axios.get(`${URL}/api/permission/id/${created_id}`, ANY_STATUS)
+        expect(updated.data.data.name).toBe(`test-permission-renamed-${RUN}`)
+        expect(updated.data.data.can_read).toBe(true)
+        expect(updated.data.data.can_create).toBe(false)
+        expect(updated.data.data.can_edit).toBe(true)
+        expect(updated.data.data.can_delete).toBe(true)
+    })
+})
+
+describe('PUT /api/permission/update/ deleted_at', () => {
+    const DELETED_SAMPLE = {
+        name: `trash-permission-${RUN}`,
+        can_read: true,
+        can_create: false,
+        can_edit: false,
+        can_delete: false
+    }
+
+    let target_id = ''
+
+    // Builds the full update body the endpoint expects, adding the deleted_at field only
+    //  when the test explicitly passes one.
+    const buildBody = (deleted_at) => {
+        const body = { ...DELETED_SAMPLE, id: target_id }
+        if (deleted_at !== undefined) body.deleted_at = deleted_at
+        return body
+    }
+
+    const readPermission = async () => {
+        const res = await axios.get(`${URL}/api/permission/id/${target_id}`, ANY_STATUS)
+        return res.data.data
+    }
+
+    beforeAll(async () => {
+        await axios.post(`${URL}/api/permission/`, DELETED_SAMPLE, ANY_STATUS)
+        const created = await axios.get(`${URL}/api/permission/name/${DELETED_SAMPLE.name}`, ANY_STATUS)
+        target_id = created.data.data.id
+    })
+
+    it('stores null on a newly created permission', async () => {
+        const permission = await readPermission()
+        expect(permission.deleted_at).toBeNull()
+    })
+
+    it('stores the Unix Epoch in seconds when true is sent', async () => {
+        const before = Math.floor(Date.now() / 1000)
+        const res = await axios.put(`${URL}/api/permission/update/`, buildBody(true), ANY_STATUS)
+        expect(res.status).toBe(200)
+
+        const permission = await readPermission()
+        expect(typeof permission.deleted_at).toBe('number')
+        expect(permission.deleted_at).toBeGreaterThanOrEqual(before)
+        expect(permission.deleted_at).toBeLessThanOrEqual(Math.floor(Date.now() / 1000))
+    })
+
+    it('returns deleted permissions in the full listing', async () => {
+        const res = await axios.get(`${URL}/api/permission/`, ANY_STATUS)
+        const permission = res.data.data.find(p => p.id === target_id)
+        expect(permission).toBeDefined()
+        expect(typeof permission.deleted_at).toBe('number')
+    })
+
+    it('still resolves a deleted permission by name', async () => {
+        const res = await axios.get(`${URL}/api/permission/name/${DELETED_SAMPLE.name}`, ANY_STATUS)
+        expect(res.status).toBe(200)
+        expect(typeof res.data.data.deleted_at).toBe('number')
+    })
+
+    it('keeps holding its UNIQUE name while it sits in the trash', async () => {
+        const res = await axios.post(`${URL}/api/permission/`, DELETED_SAMPLE, ANY_STATUS)
+        expect(res.status).toBe(409)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('permission already exists')
+    })
+
+    it('keeps the stored value when deleted_at is not sent', async () => {
+        const before = await readPermission()
+        const res = await axios.put(`${URL}/api/permission/update/`, buildBody(undefined), ANY_STATUS)
+        expect(res.status).toBe(200)
+
+        const after = await readPermission()
+        expect(after.deleted_at).toBe(before.deleted_at)
+    })
+
+    it('clears the value back to null when false is sent', async () => {
+        const res = await axios.put(`${URL}/api/permission/update/`, buildBody(false), ANY_STATUS)
+        expect(res.status).toBe(200)
+
+        const permission = await readPermission()
+        expect(permission.deleted_at).toBeNull()
+    })
+
+    it('returns 400 warning when deleted_at is not a boolean', async () => {
+        const res = await axios.put(`${URL}/api/permission/update/`, buildBody('yes'), ANY_STATUS)
+        expect(res.status).toBe(400)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('permission invalid')
+    })
+})
+
+describe('DELETE /api/permission/id/:id (soft-delete)', () => {
+    let throwaway_id = ''
+
+    it('stamps deleted_at and keeps the permission readable', async () => {
+        await axios.post(`${URL}/api/permission/`, { name: `throwaway-permission-${RUN}`, can_read: true }, ANY_STATUS)
+
+        const created = await axios.get(`${URL}/api/permission/name/throwaway-permission-${RUN}`, ANY_STATUS)
+        throwaway_id = created.data.data.id
+
+        const res = await axios.delete(`${URL}/api/permission/id/${throwaway_id}`, ANY_STATUS)
+        expect(res.status).toBe(200)
+        expect(res.data.status).toBe('success')
+        expect(res.data.description).toBe('permission deleted')
+
+        // Soft-deleted: the row stays readable so the client can show it in a trash can.
+        const gone = await axios.get(`${URL}/api/permission/id/${throwaway_id}`, ANY_STATUS)
+        expect(gone.status).toBe(200)
+        expect(typeof gone.data.data.deleted_at).toBe('number')
+
+        const after = await axios.get(`${URL}/api/permission/`, ANY_STATUS)
+        expect(after.data.data.find(p => p.id === throwaway_id)).toBeDefined()
+    })
+
+    it('restores the deleted permission through the update endpoint', async () => {
+        const res = await axios.put(`${URL}/api/permission/update/`, {
+            id: throwaway_id,
+            name: `throwaway-permission-${RUN}`,
+            can_read: true,
+            can_create: false,
+            can_edit: false,
+            can_delete: false,
+            deleted_at: false
+        }, ANY_STATUS)
+        expect(res.status).toBe(200)
+
+        const restored = await axios.get(`${URL}/api/permission/id/${throwaway_id}`, ANY_STATUS)
+        expect(restored.data.data.deleted_at).toBeNull()
+    })
+})

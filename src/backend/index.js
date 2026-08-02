@@ -28,6 +28,14 @@ tag_repository.createTable();
 const directory_repository = require('./directory/repository');
 directory_repository.createTable();
 
+// The permission seed runs last: its default rows are linked to the admin user through a
+//  relation record, so the user and relation tables have to exist already.
+const permission_repository = require('./permission/repository');
+const permission_service = require('./permission/service');
+permission_repository.createTable();
+permission_service.createDefaultPermissions();
+permission_service.linkAdminUser();
+
 // --------------------------------------------------------------------------------
 // Starts web server
 // --------------------------------------------------------------------------------
