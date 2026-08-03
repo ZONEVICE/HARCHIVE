@@ -28,6 +28,9 @@ tag_repository.createTable();
 const directory_repository = require('./directory/repository');
 directory_repository.createTable();
 
+const workspace_repository = require('./workspace/repository');
+workspace_repository.createTable();
+
 // The permission seed runs last: its default rows are linked to the admin user through a
 //  relation record, so the user and relation tables have to exist already.
 const permission_repository = require('./permission/repository');

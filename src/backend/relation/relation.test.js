@@ -415,20 +415,35 @@ const relationGetByEntity = (entity) => axios.get(`${URL}/api/relation/entity/${
 const relationGetByEntityId = (id) => axios.get(`${URL}/api/relation/entity_id/${id}`, ANY_STATUS)
 const relationDelete = (id) => axios.delete(`${URL}/api/relation/id/${id}`, ANY_STATUS)
 
+// One wrapper per permission route the blocks below need (the "permission x tag" block and the
+//  "user x permission" block further down). Like every other entity here, permission is reached
+//  only through its own HTTP surface, never through its internals.
+const permissionPost = (body) => axios.post(`${URL}/api/permission/`, body, ANY_STATUS)
+const permissionGetById = (id) => axios.get(`${URL}/api/permission/id/${id}`, ANY_STATUS)
+const permissionGetByName = (name) => axios.get(`${URL}/api/permission/name/${encodeURIComponent(name)}`, ANY_STATUS)
+const permissionUpdate = (body) => axios.put(`${URL}/api/permission/update/`, body, ANY_STATUS)
+const permissionDelete = (id) => axios.delete(`${URL}/api/permission/id/${id}`, ANY_STATUS)
+
+// One wrapper per route in workspace/routes.js. Like every other entity here, workspace is
+//  reached only through its own HTTP surface, never through its internals.
+const workspacePost = (body) => axios.post(`${URL}/api/workspace/`, body, ANY_STATUS)
+const workspaceGetAll = () => axios.get(`${URL}/api/workspace/`, ANY_STATUS)
+const workspaceGetById = (id) => axios.get(`${URL}/api/workspace/id/${id}`, ANY_STATUS)
+const workspaceUpdate = (body) => axios.put(`${URL}/api/workspace/update/`, body, ANY_STATUS)
+const workspaceDelete = (id) => axios.delete(`${URL}/api/workspace/id/${id}`, ANY_STATUS)
+
 describe('System entity catalogue coverage', () => {
     // Guard for the blocks below: each entity of the catalogue has its own block. When an
     //  entity is added, removed or renamed in SYSTEM_ENTITIES this test fails, as a reminder
     //  to write (or retire) the matching block instead of silently losing the coverage.
-    const TAG_COVERED_ENTITIES = ['directory', 'file', 'metadata', 'profile', 'relation', 'tag', 'user']
-
-    // permission is deliberately not one of them: it is never tagged, it is only ever related
-    //  to a user, so its coverage is the "user x permission" block at the bottom of this file
-    //  instead of a tag block. Keep it listed here — the guard is about every entity of the
-    //  catalogue being covered *somewhere*, not about every entity being tagged.
-    const COVERED_ENTITIES = [...TAG_COVERED_ENTITIES, 'permission']
+    // permission is covered twice on purpose: the "permission x tag" block proves nothing
+    //  restricts it from being tagged like any other catalogue entity (portability first, even
+    //  though the GUI may end up never exposing that combination), and the "user x permission"
+    //  block covers the real authorization link, which is what a permission is actually used for.
+    const TAG_COVERED_ENTITIES = ['directory', 'file', 'metadata', 'permission', 'relation', 'tag', 'user', 'workspace']
 
     it('SYSTEM_ENTITIES holds exactly the entities covered by the blocks below', () => {
-        expect([...SYSTEM_ENTITIES].sort()).toEqual([...COVERED_ENTITIES].sort())
+        expect([...SYSTEM_ENTITIES].sort()).toEqual([...TAG_COVERED_ENTITIES].sort())
     })
 
     it('offers the relation types the blocks below use', async () => {
@@ -748,26 +763,30 @@ describe('metadata x tag — the six tag routes with a live relation', () => {
     })
 })
 
-describe('profile x tag — the six tag routes with a live relation', () => {
-    const TAG = { name: `rel-profile-${RUN}`, metadata: '{"related_to":"profile"}' }
-    const RENAMED = `rel-profile-renamed-${RUN}`
-    const NOTE = `relation-test: profile <-> tag ${RUN}`
+describe('permission x tag — the six tag routes with a live relation', () => {
+    // This is not the authorization link (a permission is granted to a user through a "linked"
+    //  relation, covered by the "user x permission" block further down). Nothing in
+    //  SYSTEM_ENTITIES, RELATION_TYPES or the validators singles permission out, so it can be
+    //  tagged like any other catalogue entity — this block proves it, for portability, even if
+    //  the GUI never ends up exposing the combination.
+    const TAG = { name: `rel-permission-${RUN}`, metadata: '{"related_to":"permission"}' }
+    const RENAMED = `rel-permission-renamed-${RUN}`
+    const NOTE = `relation-test: permission <-> tag ${RUN}`
 
-    // profile/ is not wired into the server yet: it has no table and no routes, so the
-    //  relation points at a placeholder id, exactly like the directory block above.
-    const profile_id = 1
+    const PERMISSION_NAME = `rel-permission-${RUN}`
 
     let tag_id = ''
+    let permission_id = ''
     let relation_id = ''
 
-    it('the profile entity is still unwired (reminder to complete this block)', async () => {
-        // When profile gets its routes, replace profile_id above with a real record and drop
-        //  this test.
-        const res = await axios.get(`${URL}/api/profile/`, ANY_STATUS)
-        expect(res.status).toBe(404)
+    beforeAll(async () => {
+        // Scaffolding: the permission only exists to be the other side of the relation.
+        await permissionPost({ name: PERMISSION_NAME, can_read: false, can_create: false, can_edit: false, can_delete: false })
+        const created = await permissionGetByName(PERMISSION_NAME)
+        permission_id = created.data.data.id
     })
 
-    it('POST /api/tag/ creates the tag linked to the profile', async () => {
+    it('POST /api/tag/ creates the tag the permission will be tagged with', async () => {
         const res = await tagPost(TAG)
         expect(res.status).toBe(201)
         expect(res.data.status).toBe('success')
@@ -777,13 +796,13 @@ describe('profile x tag — the six tag routes with a live relation', () => {
         expect(typeof tag_id).toBe('number')
     })
 
-    it('relates the profile to the tag with a "linked" relation', async () => {
+    it('relates the permission to the tag with a "tagged" relation', async () => {
         const res = await relationPost({
-            id_1: profile_id,
-            entity_1: 'profile',
+            id_1: permission_id,
+            entity_1: 'permission',
             id_2: tag_id,
             entity_2: 'tag',
-            relation_type: 'linked',
+            relation_type: 'tagged',
             note: NOTE
         })
         expect(res.status).toBe(201)
@@ -800,7 +819,7 @@ describe('profile x tag — the six tag routes with a live relation', () => {
 
     it('GET /api/tag/id/:id resolves the tag the relation points at', async () => {
         const relation = await relationGetById(relation_id)
-        expect(relation.data.data.entity_1).toBe('profile')
+        expect(relation.data.data.entity_1).toBe('permission')
         expect(relation.data.data.entity_2).toBe('tag')
 
         const res = await tagGetById(relation.data.data.id_2)
@@ -835,10 +854,233 @@ describe('profile x tag — the six tag routes with a live relation', () => {
         expect(typeof tag.data.data.deleted_at).toBe('number')
     })
 
-    it('GET /api/relation/entity/profile still lists the relation', async () => {
-        const res = await relationGetByEntity('profile')
+    it('GET /api/relation/entity/permission still lists the relation', async () => {
+        const res = await relationGetByEntity('permission')
         expect(res.status).toBe(200)
         expect(res.data.data.find(r => r.id === relation_id)).toBeDefined()
+    })
+
+    it('GET /api/relation/entity_id/:id finds the relation from the permission side', async () => {
+        const res = await relationGetByEntityId(permission_id)
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(r => r.id === relation_id)).toBeDefined()
+    })
+
+    afterAll(async () => {
+        await relationDelete(relation_id)
+        await permissionDelete(permission_id)
+    })
+})
+
+describe('workspace x tag — the six tag routes with a live relation', () => {
+    const TAG = { name: `rel-workspace-${RUN}`, metadata: '{"related_to":"workspace"}' }
+    const RENAMED = `rel-workspace-renamed-${RUN}`
+    const NOTE = `relation-test: workspace <-> tag ${RUN}`
+
+    const WORKSPACE = { name: `rel-workspace-${RUN}`, path_absolute: `/rel-workspace-${RUN}/`, path_relative: `rel-workspace-${RUN}` }
+
+    let tag_id = ''
+    let workspace_id = ''
+    let relation_id = ''
+
+    beforeAll(async () => {
+        // Scaffolding: the workspace only exists to be the other side of the relation.
+        await workspacePost(WORKSPACE)
+        const workspaces = await workspaceGetAll()
+        workspace_id = workspaces.data.data.find(w => w.path_absolute === WORKSPACE.path_absolute).id
+    })
+
+    it('POST /api/tag/ creates the tag the workspace will be tagged with', async () => {
+        const res = await tagPost(TAG)
+        expect(res.status).toBe(201)
+        expect(res.data.status).toBe('success')
+
+        const created = await tagGetByName(TAG.name)
+        tag_id = created.data.data.id
+        expect(typeof tag_id).toBe('number')
+    })
+
+    it('relates the workspace to the tag with a "tagged" relation', async () => {
+        const res = await relationPost({
+            id_1: workspace_id,
+            entity_1: 'workspace',
+            id_2: tag_id,
+            entity_2: 'tag',
+            relation_type: 'tagged',
+            note: NOTE
+        })
+        expect(res.status).toBe(201)
+
+        relation_id = await findRelationIdByNote(NOTE)
+        expect(typeof relation_id).toBe('number')
+    })
+
+    it('GET /api/tag/ lists the related tag', async () => {
+        const res = await tagGetAll()
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(t => t.id === tag_id)).toBeDefined()
+    })
+
+    it('GET /api/tag/id/:id resolves the tag the relation points at', async () => {
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.entity_1).toBe('workspace')
+        expect(relation.data.data.entity_2).toBe('tag')
+
+        const res = await tagGetById(relation.data.data.id_2)
+        expect(res.status).toBe(200)
+        expect(res.data.data.name).toBe(TAG.name)
+    })
+
+    it('GET /api/tag/name/:name resolves the same tag, whatever the case', async () => {
+        const res = await tagGetByName(TAG.name.toUpperCase())
+        expect(res.status).toBe(200)
+        expect(res.data.data.id).toBe(tag_id)
+    })
+
+    it('PUT /api/tag/update/ renames the tag without breaking the relation', async () => {
+        const res = await tagUpdate({ id: tag_id, name: RENAMED, metadata: TAG.metadata })
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        expect(relation.data.data.id_2).toBe(tag_id)
+
+        const renamed = await tagGetById(relation.data.data.id_2)
+        expect(renamed.data.data.name).toBe(RENAMED)
+    })
+
+    it('DELETE /api/tag/id/:id soft-deletes the tag and the relation still resolves it', async () => {
+        const res = await tagDelete(tag_id)
+        expect(res.status).toBe(200)
+
+        const relation = await relationGetById(relation_id)
+        const tag = await tagGetById(relation.data.data.id_2)
+        expect(tag.status).toBe(200)
+        expect(typeof tag.data.data.deleted_at).toBe('number')
+    })
+
+    it('GET /api/relation/entity/workspace still lists the relation', async () => {
+        const res = await relationGetByEntity('workspace')
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(r => r.id === relation_id)).toBeDefined()
+    })
+
+    it('GET /api/relation/entity_id/:id finds the relation from the workspace side', async () => {
+        const res = await relationGetByEntityId(workspace_id)
+        expect(res.status).toBe(200)
+        expect(res.data.data.find(r => r.id === relation_id)).toBeDefined()
+    })
+
+    afterAll(async () => {
+        await relationDelete(relation_id)
+        await workspaceDelete(workspace_id)
+    })
+})
+
+describe('metadata x workspace — a direct relation between two non-tag entities', () => {
+    // This is the pairing the WorkSpace entity exists for in the first place: which absolute
+    //  directories the file system manager may work in is stored as a workspace record, and a
+    //  metadata key/value can point at one directly, exactly like the "directory x file"
+    //  hierarchy above proves two non-tag entities can be related without going through tag.
+    const KEY = `rel_metadata_workspace_key_${RUN}`
+    const WORKSPACE = { name: `rel-metadata-workspace-${RUN}`, path_absolute: `/rel-metadata-workspace-${RUN}/`, path_relative: `rel-metadata-workspace-${RUN}` }
+    const NOTE = `relation-test: metadata <-> workspace ${RUN}`
+
+    let metadata_id = ''
+    let workspace_id = ''
+    let relation_id = ''
+
+    beforeAll(async () => {
+        // Scaffolding: a metadata record and a workspace record, each only existing to be one
+        //  side of the relation.
+        await axios.post(`${URL}/api/metadata/`, { name: KEY, value: WORKSPACE.path_absolute }, ANY_STATUS)
+        const metadata = await axios.get(`${URL}/api/metadata/name/${KEY}`, ANY_STATUS)
+        metadata_id = metadata.data.data.id
+
+        await workspacePost(WORKSPACE)
+        const workspaces = await workspaceGetAll()
+        workspace_id = workspaces.data.data.find(w => w.path_absolute === WORKSPACE.path_absolute).id
+    })
+
+    it('the scaffolding records exist on both sides', () => {
+        expect(typeof metadata_id).toBe('number')
+        expect(typeof workspace_id).toBe('number')
+    })
+
+    it('relates the metadata record to the workspace with a "linked" relation', async () => {
+        const res = await relationPost({
+            id_1: metadata_id,
+            entity_1: 'metadata',
+            id_2: workspace_id,
+            entity_2: 'workspace',
+            relation_type: 'linked',
+            note: NOTE
+        })
+        expect(res.status).toBe(201)
+        expect(res.data.status).toBe('success')
+
+        relation_id = await findRelationIdByNote(NOTE)
+        expect(typeof relation_id).toBe('number')
+    })
+
+    it('stores the metadata record as id_1 and the workspace as id_2', async () => {
+        const res = await relationGetById(relation_id)
+        expect(res.status).toBe(200)
+        expect(res.data.data.entity_1).toBe('metadata')
+        expect(res.data.data.id_1).toBe(metadata_id)
+        expect(res.data.data.entity_2).toBe('workspace')
+        expect(res.data.data.id_2).toBe(workspace_id)
+    })
+
+    it('resolves both sides of the relation through their own routes', async () => {
+        const relation = await relationGetById(relation_id)
+
+        const metadata = await axios.get(`${URL}/api/metadata/id/${relation.data.data.id_1}`, ANY_STATUS)
+        expect(metadata.status).toBe(200)
+        expect(metadata.data.data.name).toBe(KEY)
+
+        const workspace = await workspaceGetById(relation.data.data.id_2)
+        expect(workspace.status).toBe(200)
+        expect(workspace.data.data.path_absolute).toBe(WORKSPACE.path_absolute)
+    })
+
+    it('GET /api/relation/entity/:entity lists it from both entity names', async () => {
+        const from_metadata = await relationGetByEntity('metadata')
+        expect(from_metadata.status).toBe(200)
+        expect(from_metadata.data.data.find(r => r.id === relation_id)).toBeDefined()
+
+        const from_workspace = await relationGetByEntity('workspace')
+        expect(from_workspace.status).toBe(200)
+        expect(from_workspace.data.data.find(r => r.id === relation_id)).toBeDefined()
+    })
+
+    it('GET /api/relation/entity_id/:id finds it from either side', async () => {
+        const from_metadata = await relationGetByEntityId(metadata_id)
+        expect(from_metadata.data.data.find(r => r.id === relation_id)).toBeDefined()
+
+        const from_workspace = await relationGetByEntityId(workspace_id)
+        expect(from_workspace.data.data.find(r => r.id === relation_id)).toBeDefined()
+    })
+
+    it('keeps the link readable after the metadata record is soft-deleted', async () => {
+        await axios.delete(`${URL}/api/metadata/name/${KEY}`, ANY_STATUS)
+
+        const relation = await relationGetById(relation_id)
+        expect(relation.status).toBe(200)
+
+        const metadata = await axios.get(`${URL}/api/metadata/id/${relation.data.data.id_1}`, ANY_STATUS)
+        expect(metadata.status).toBe(200)
+        expect(typeof metadata.data.data.deleted_at).toBe('number')
+    })
+
+    it('keeps the link readable after the workspace is soft-deleted too', async () => {
+        await workspaceDelete(workspace_id)
+
+        const relation = await relationGetById(relation_id)
+        expect(relation.status).toBe(200)
+
+        const workspace = await workspaceGetById(relation.data.data.id_2)
+        expect(workspace.status).toBe(200)
+        expect(typeof workspace.data.data.deleted_at).toBe('number')
     })
 
     afterAll(async () => {
@@ -1372,15 +1614,10 @@ describe('directory x file — "contains" and "sibling" relations', () => {
 // The HTTP surface cannot show it: the authorize(verb) guard exists in
 // web/middleware.js but no route lists it yet, so the resolution is only observable
 // from the backend side. What is asserted is exactly what the guard will ask.
+//
+// This is the real authorization link. It is separate from the "permission x tag" block
+// above, which only proves a permission is not exempt from being related to a tag.
 // --------------------------------------------------------------------------------
-
-// One wrapper per permission route this block needs. Like every other entity here, permission
-//  is reached only through its own HTTP surface, never through its internals.
-const permissionPost = (body) => axios.post(`${URL}/api/permission/`, body, ANY_STATUS)
-const permissionGetById = (id) => axios.get(`${URL}/api/permission/id/${id}`, ANY_STATUS)
-const permissionGetByName = (name) => axios.get(`${URL}/api/permission/name/${encodeURIComponent(name)}`, ANY_STATUS)
-const permissionUpdate = (body) => axios.put(`${URL}/api/permission/update/`, body, ANY_STATUS)
-const permissionDelete = (id) => axios.delete(`${URL}/api/permission/id/${id}`, ANY_STATUS)
 
 describe('user x permission — the link that grants rights', () => {
     const PERMISSION_NAME = `rel-user-permission-${RUN}`

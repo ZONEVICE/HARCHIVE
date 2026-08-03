@@ -21,5 +21,6 @@ require('../file/routes')(app)
 require('../tag/routes')(app)
 require('../directory/routes')(app)
 require('../permission/routes')(app)
+require('../workspace/routes')(app)
 
 module.exports = app
