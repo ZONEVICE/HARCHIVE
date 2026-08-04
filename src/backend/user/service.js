@@ -1,24 +1,31 @@
 const User = require('./model')
 const repository = require('./repository')
-const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../core/constants')
 const { createToken } = require('../core/jwt')
 
 const _ = {}
 
-// Seed data: the project has a single admin user, created at startup when it is missing.
-//  Calling it again on an existing database does nothing.
-_.createAdminUser = () => {
-    if (repository.LoadAdminUser() !== null) return
-    const user = new User()
-    user.username = ADMIN_USERNAME
-    user.password = ADMIN_DEFAULT_PASSWORD
-    repository.Post(user)
-}
+// --------------------------------------------------------------------------------
+// Data access. This service is the only door to repository.js: nothing outside the
+//  entity reaches the repository itself, it always comes through here.
+// --------------------------------------------------------------------------------
 
-// The seeded admin account, or null when it is missing. Public because other entities need to
-//  reach it through this surface instead of the repository: permission/service.linkAdminUser
-//  grants it the administrator permission at startup.
+// The seeded admin account, or null when it is missing. The seeder entity reads it to know
+//  whether the account still has to be created, and again to grant it the administrator
+//  permission.
 _.getAdminUser = () => repository.LoadAdminUser()
+
+_.create = (user) => repository.Post(user)
+
+// Builds a User from a create request. The id is assigned by the database. No HTTP route
+//  creates a user yet — the caller today is the seeder entity, which creates the admin account
+//  at startup — but the shape is the same one every other entity uses, so wiring a POST later
+//  changes nothing here.
+_.buildForCreate = (body) => {
+    const user = new User()
+    user.username = body.username
+    user.password = body.password
+    return user
+}
 
 // Passwords are stored in plain text for now, so verification is a direct comparison.
 //  Returns null when the username does not exist or when the password does not match,

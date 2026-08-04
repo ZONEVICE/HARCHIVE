@@ -62,7 +62,7 @@ _.softDelete = (id, deleted_at) => db.prepare('UPDATE permission SET deleted_at 
 // Clears the trash mark without touching the flags. The startup seed needs it: a default
 //  permission sitting in the trash is restored, never re-created, because its UNIQUE name
 //  is still taken.
-_.restore = (id) => db.prepare('UPDATE permission SET deleted_at = NULL WHERE id = ?').run(id)
+_.restoreFromTrashCan = (id) => db.prepare('UPDATE permission SET deleted_at = NULL WHERE id = ?').run(id)
 
 // Physical deletes. They are not reachable from any HTTP endpoint: only backend code
 //  calling service.hardDelete gets to them.

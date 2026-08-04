@@ -9,6 +9,7 @@ const { verifyToken } = require('../core/jwt')
 const { RELATION_TYPES } = require('./types-of-relation')
 const relation_repository = require('./repository')
 const permission_service = require('../permission/service')
+const seeder_service = require('../seeder/service')
 const { ADMINISTRATOR_PERMISSION_NAME } = require('../permission/util')
 
 // Every request is read as data, never as an exception, so each test asserts the status code
@@ -49,11 +50,11 @@ async function findRelationIdByNote(note) {
 beforeAll(() => {
     relation_repository.deleteAll()
 
-    // The wipe above also removes the admin user -> administrator permission link that
-    //  index.js creates at startup, and nothing re-creates it until the next boot. Calling the
+    // The wipe above also removes the admin user -> administrator permission link that the
+    //  seeder creates at startup, and nothing re-creates it until the next boot. Calling the
     //  startup function again puts the invariant back, so the authorization block below tests
     //  the real seeded link and the database is left sane for the run after this one.
-    permission_service.linkAdminUser()
+    seeder_service.linkAdminUser()
 })
 
 describe('GET /api/relation/entities/', () => {
