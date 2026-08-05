@@ -4,12 +4,32 @@ const URL = `http://localhost:${PORT}`
 const axios = require('axios')
 
 const tag_repository = require('./repository')
+const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../core/constants')
 
 const SAMPLE = { name: 'portrait', metadata: '{"color":"blue"}' }
 
-// Every request is read as data, never as an exception, so each test asserts the status code
-//  itself instead of branching on a thrown error.
-const ANY_STATUS = { validateStatus: () => true }
+// The axios config every request in this file uses.
+//
+//  `validateStatus` reads every response as data, never as an exception, so each test asserts
+//  the status code itself instead of branching on a thrown error.
+//
+//  `headers.Cookie` carries the session. Every route of this entity sits behind the
+//  `authenticate` middleware, so the suite has to drive it as a logged-in client. The cookie is
+//  only known once the server answers a login, so it is filled in by the beforeAll below and
+//  every request reads it from here.
+const AS_ADMIN = { validateStatus: () => true, headers: {} }
+
+// A request with no session at all, for the tests that check the guard itself.
+const ANONYMOUS = { validateStatus: () => true }
+
+// Signs in as the seeded admin and keeps its session cookie for the rest of the file.
+const loginAsAdmin = async () => {
+    const res = await axios.post(`${URL}/api/user/login/`, {
+        username: ADMIN_USERNAME,
+        password: ADMIN_DEFAULT_PASSWORD
+    })
+    AS_ADMIN.headers.Cookie = res.headers['set-cookie'][0].split(';')[0]
+}
 
 let created_id = ''
 
@@ -20,14 +40,15 @@ let created_id = ''
 // the system lives in the relation entity, so those tests live in
 // relation/relation.test.js.
 // --------------------------------------------------------------------------------
-const tagGetAll = () => axios.get(`${URL}/api/tag/`, ANY_STATUS)
-const tagGetById = (id) => axios.get(`${URL}/api/tag/id/${id}`, ANY_STATUS)
-const tagGetByName = (name) => axios.get(`${URL}/api/tag/name/${encodeURIComponent(name)}`, ANY_STATUS)
-const tagPost = (body) => axios.post(`${URL}/api/tag/`, body, ANY_STATUS)
-const tagUpdate = (body) => axios.put(`${URL}/api/tag/update/`, body, ANY_STATUS)
-const tagDelete = (id) => axios.delete(`${URL}/api/tag/id/${id}`, ANY_STATUS)
+const tagGetAll = () => axios.get(`${URL}/api/tag/`, AS_ADMIN)
+const tagGetById = (id) => axios.get(`${URL}/api/tag/id/${id}`, AS_ADMIN)
+const tagGetByName = (name) => axios.get(`${URL}/api/tag/name/${encodeURIComponent(name)}`, AS_ADMIN)
+const tagPost = (body) => axios.post(`${URL}/api/tag/`, body, AS_ADMIN)
+const tagUpdate = (body) => axios.put(`${URL}/api/tag/update/`, body, AS_ADMIN)
+const tagDelete = (id) => axios.delete(`${URL}/api/tag/id/${id}`, AS_ADMIN)
 
-beforeAll(() => {
+beforeAll(async () => {
+    await loginAsAdmin()
     tag_repository.deleteAll()
 })
 
@@ -470,5 +491,23 @@ describe('PUT /api/tag/update/ deleted_at', () => {
         const res = await tagUpdate(buildBody(false))
         expect(res.status).toBe(200)
         expect((await readTag()).deleted_at).toBeNull()
+    })
+})
+
+describe('the authenticate middleware guards every route', () => {
+    // The guard answers before the handler runs, so the body is never even looked at: a
+    //  perfectly valid request without a session is rejected exactly like an invalid one.
+    it('answers 401 on a read without a session', async () => {
+        const res = await axios.get(`${URL}/api/tag/`, ANONYMOUS)
+        expect(res.status).toBe(401)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('authentication required')
+    })
+
+    it('answers 401 on a write without a session', async () => {
+        const res = await axios.post(`${URL}/api/tag/`, { name: `unauthenticated-${Date.now()}` }, ANONYMOUS)
+        expect(res.status).toBe(401)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('authentication required')
     })
 })

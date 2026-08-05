@@ -1,4 +1,5 @@
 const controller = require('./controller')
+const { authenticate } = require('../web/middleware');
 
 module.exports = app => {
     app.get('/api/relation/',                 controller.getAll)
@@ -7,7 +8,7 @@ module.exports = app => {
     app.get('/api/relation/id/:id',           controller.getById)
     app.get('/api/relation/entity/:entity',   controller.getByEntity)
     app.get('/api/relation/entity_id/:id',    controller.getByEntityId)
-    app.post('/api/relation/',                controller.post)
-    app.put('/api/relation/update/',          controller.update)
-    app.delete('/api/relation/id/:id',        controller.deleteById)
+    app.post('/api/relation/',                authenticate, controller.post)
+    app.put('/api/relation/update/',          authenticate, controller.update)
+    app.delete('/api/relation/id/:id',        authenticate, controller.deleteById)
 }

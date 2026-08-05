@@ -12,9 +12,29 @@ const permission_service = require('../permission/service')
 const seeder_service = require('../seeder/service')
 const { ADMINISTRATOR_PERMISSION_NAME } = require('../permission/util')
 
-// Every request is read as data, never as an exception, so each test asserts the status code
-//  itself instead of branching on a thrown error.
-const ANY_STATUS = { validateStatus: () => true }
+// The axios config every request in this file uses.
+//
+//  `validateStatus` reads every response as data, never as an exception, so each test asserts
+//  the status code itself instead of branching on a thrown error.
+//
+//  `headers.Cookie` carries the session. The write routes of relation sit behind the
+//  `authenticate` middleware, and so does every route of the entities this file relates to
+//  (tag, directory, file, permission, workspace), so the suite has to drive them as a logged-in
+//  client. The cookie is only known once the server answers a login, so it is filled in by the
+//  beforeAll below and every request reads it from here.
+const AS_ADMIN = { validateStatus: () => true, headers: {} }
+
+// A request with no session at all, for the tests that check the guard itself.
+const ANONYMOUS = { validateStatus: () => true }
+
+// Signs in as the seeded admin and keeps its session cookie for the rest of the file.
+const loginAsAdmin = async () => {
+    const res = await axios.post(`${URL}/api/user/login/`, {
+        username: ADMIN_USERNAME,
+        password: ADMIN_DEFAULT_PASSWORD
+    })
+    AS_ADMIN.headers.Cookie = res.headers['set-cookie'][0].split(';')[0]
+}
 
 const SAMPLE = {
     id_1: 100,
@@ -39,7 +59,7 @@ let sample_id = ''
 let second_id = ''
 
 async function findRelationIdByNote(note) {
-    const res = await axios.get(`${URL}/api/relation/`, { validateStatus: () => true })
+    const res = await axios.get(`${URL}/api/relation/`, AS_ADMIN)
     const found = res.data.data.filter(r => r.note === note)
     if (found.length === 0) return null
     // The last match is the one this run created: relations are only ever soft-deleted, so a
@@ -47,7 +67,9 @@ async function findRelationIdByNote(note) {
     return found[found.length - 1].id
 }
 
-beforeAll(() => {
+beforeAll(async () => {
+    await loginAsAdmin()
+
     relation_repository.deleteAll()
 
     // The wipe above also removes the admin user -> administrator permission link that the
@@ -59,7 +81,7 @@ beforeAll(() => {
 
 describe('GET /api/relation/entities/', () => {
     it('returns 200 with the enumerated list of system entities', async () => {
-        const res = await axios.get(`${URL}/api/relation/entities/`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/relation/entities/`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(Array.isArray(res.data.data)).toBe(true)
@@ -69,7 +91,7 @@ describe('GET /api/relation/entities/', () => {
 
 describe('GET /api/relation/types/', () => {
     it('returns 200 with the fixed list of relation types', async () => {
-        const res = await axios.get(`${URL}/api/relation/types/`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/relation/types/`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(Array.isArray(res.data.data)).toBe(true)
@@ -79,21 +101,21 @@ describe('GET /api/relation/types/', () => {
 
 describe('POST /api/relation/', () => {
     it('returns 400 warning on invalid body (id_1 not a number)', async () => {
-        const res = await axios.post(`${URL}/api/relation/`, { ...SAMPLE, id_1: '100' }, { validateStatus: () => true })
+        const res = await axios.post(`${URL}/api/relation/`, { ...SAMPLE, id_1: '100' }, AS_ADMIN)
         expect(res.status).toBe(400)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('relation invalid')
     })
 
     it('returns 400 warning on entity not in SYSTEM_ENTITIES', async () => {
-        const res = await axios.post(`${URL}/api/relation/`, { ...SAMPLE, entity_1: 'not-a-real-entity' }, { validateStatus: () => true })
+        const res = await axios.post(`${URL}/api/relation/`, { ...SAMPLE, entity_1: 'not-a-real-entity' }, AS_ADMIN)
         expect(res.status).toBe(400)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('relation invalid')
     })
 
     it('returns 400 warning on relation_type not in RELATION_TYPES', async () => {
-        const res = await axios.post(`${URL}/api/relation/`, { ...SAMPLE, relation_type: 'not-a-real-type' }, { validateStatus: () => true })
+        const res = await axios.post(`${URL}/api/relation/`, { ...SAMPLE, relation_type: 'not-a-real-type' }, AS_ADMIN)
         expect(res.status).toBe(400)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('relation invalid')
@@ -102,14 +124,14 @@ describe('POST /api/relation/', () => {
     it('returns 400 warning on missing relation_type', async () => {
         const no_type = { ...SAMPLE }
         delete no_type.relation_type
-        const res = await axios.post(`${URL}/api/relation/`, no_type, { validateStatus: () => true })
+        const res = await axios.post(`${URL}/api/relation/`, no_type, AS_ADMIN)
         expect(res.status).toBe(400)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('relation invalid')
     })
 
     it('returns 201 on valid relation', async () => {
-        const res = await axios.post(`${URL}/api/relation/`, SAMPLE, { validateStatus: () => true })
+        const res = await axios.post(`${URL}/api/relation/`, SAMPLE, AS_ADMIN)
         expect(res.status).toBe(201)
         expect(res.data.status).toBe('success')
         expect(res.data.description).toBe('relation created')
@@ -121,13 +143,13 @@ describe('POST /api/relation/', () => {
     it('returns 201 on valid relation without note (note is nullable)', async () => {
         const no_note = { ...SECOND_SAMPLE }
         delete no_note.note
-        const res = await axios.post(`${URL}/api/relation/`, no_note, { validateStatus: () => true })
+        const res = await axios.post(`${URL}/api/relation/`, no_note, AS_ADMIN)
         expect(res.status).toBe(201)
         expect(res.data.status).toBe('success')
     })
 
     it('allows a second relation for the same id_1 and a different id_2 (no uniqueness restriction)', async () => {
-        const res = await axios.post(`${URL}/api/relation/`, SECOND_SAMPLE, { validateStatus: () => true })
+        const res = await axios.post(`${URL}/api/relation/`, SECOND_SAMPLE, AS_ADMIN)
         expect(res.status).toBe(201)
         expect(res.data.status).toBe('success')
         expect(res.data.description).toBe('relation created')
@@ -139,7 +161,7 @@ describe('POST /api/relation/', () => {
 
 describe('GET /api/relation/', () => {
     it('returns 200 with a data array', async () => {
-        const res = await axios.get(`${URL}/api/relation/`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/relation/`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(Array.isArray(res.data.data)).toBe(true)
@@ -148,7 +170,7 @@ describe('GET /api/relation/', () => {
 
 describe('GET /api/relation/id/:id', () => {
     it('returns 200 with the relation when found', async () => {
-        const res = await axios.get(`${URL}/api/relation/id/${sample_id}`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/relation/id/${sample_id}`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(res.data.data.id).toBe(sample_id)
@@ -158,7 +180,7 @@ describe('GET /api/relation/id/:id', () => {
     })
 
     it('returns 404 when the id does not exist', async () => {
-        const res = await axios.get(`${URL}/api/relation/id/nonexistent-id`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/relation/id/nonexistent-id`, AS_ADMIN)
         expect(res.status).toBe(404)
         expect(res.data.status).toBe('failed')
         expect(res.data.description).toBe('relation not found')
@@ -167,7 +189,7 @@ describe('GET /api/relation/id/:id', () => {
 
 describe('GET /api/relation/entity/:entity', () => {
     it('returns 200 with relations matching the entity', async () => {
-        const res = await axios.get(`${URL}/api/relation/entity/${SAMPLE.entity_1}`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/relation/entity/${SAMPLE.entity_1}`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(Array.isArray(res.data.data)).toBe(true)
@@ -176,7 +198,7 @@ describe('GET /api/relation/entity/:entity', () => {
     })
 
     it('returns 400 warning when entity is not in SYSTEM_ENTITIES', async () => {
-        const res = await axios.get(`${URL}/api/relation/entity/not-a-real-entity`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/relation/entity/not-a-real-entity`, AS_ADMIN)
         expect(res.status).toBe(400)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('relation entity invalid')
@@ -185,7 +207,7 @@ describe('GET /api/relation/entity/:entity', () => {
 
 describe('GET /api/relation/entity_id/:id', () => {
     it('returns 200 with relations where the record id appears on either side', async () => {
-        const res = await axios.get(`${URL}/api/relation/entity_id/${SAMPLE.id_1}`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/relation/entity_id/${SAMPLE.id_1}`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(Array.isArray(res.data.data)).toBe(true)
@@ -195,7 +217,7 @@ describe('GET /api/relation/entity_id/:id', () => {
     })
 
     it('returns 200 with empty array when no relation matches', async () => {
-        const res = await axios.get(`${URL}/api/relation/entity_id/0`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/relation/entity_id/0`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(Array.isArray(res.data.data)).toBe(true)
@@ -205,26 +227,26 @@ describe('GET /api/relation/entity_id/:id', () => {
 
 describe('PUT /api/relation/update/', () => {
     it('returns 400 warning on invalid body (id_1 not a number)', async () => {
-        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: sample_id, id_1: '100' }, { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: sample_id, id_1: '100' }, AS_ADMIN)
         expect(res.status).toBe(400)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('relation invalid')
     })
 
     it('returns 404 when relation does not exist', async () => {
-        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: 999999 }, { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: 999999 }, AS_ADMIN)
         expect(res.status).toBe(404)
         expect(res.data.status).toBe('failed')
         expect(res.data.description).toBe('relation not found')
     })
 
     it('returns 200 on valid update (note and relation_type changed)', async () => {
-        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: sample_id, relation_type: 'sibling', note: 'Updated note' }, { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: sample_id, relation_type: 'sibling', note: 'Updated note' }, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(res.data.description).toBe('relation updated')
 
-        const get = await axios.get(`${URL}/api/relation/id/${sample_id}`, { validateStatus: () => true })
+        const get = await axios.get(`${URL}/api/relation/id/${sample_id}`, AS_ADMIN)
         expect(get.data.data.note).toBe('Updated note')
         expect(get.data.data.relation_type).toBe('sibling')
     })
@@ -251,12 +273,12 @@ describe('PUT /api/relation/update/ deleted_at', () => {
     }
 
     const readRelation = async () => {
-        const res = await axios.get(`${URL}/api/relation/id/${target_id}`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/relation/id/${target_id}`, AS_ADMIN)
         return res.data.data
     }
 
     beforeAll(async () => {
-        await axios.post(`${URL}/api/relation/`, DELETED_SAMPLE, { validateStatus: () => true })
+        await axios.post(`${URL}/api/relation/`, DELETED_SAMPLE, AS_ADMIN)
         target_id = await findRelationIdByNote(DELETED_SAMPLE.note)
     })
 
@@ -267,7 +289,7 @@ describe('PUT /api/relation/update/ deleted_at', () => {
 
     it('stores the Unix Epoch in seconds when true is sent', async () => {
         const before = Math.floor(Date.now() / 1000)
-        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(true), { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(true), AS_ADMIN)
         expect(res.status).toBe(200)
 
         const relation = await readRelation()
@@ -277,28 +299,28 @@ describe('PUT /api/relation/update/ deleted_at', () => {
     })
 
     it('returns deleted relations in the full listing', async () => {
-        const res = await axios.get(`${URL}/api/relation/`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/relation/`, AS_ADMIN)
         const relation = res.data.data.find(r => r.id === target_id)
         expect(relation).toBeDefined()
         expect(typeof relation.deleted_at).toBe('number')
     })
 
     it('returns a deleted relation when asked by id', async () => {
-        const res = await axios.get(`${URL}/api/relation/id/${target_id}`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/relation/id/${target_id}`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(typeof res.data.data.deleted_at).toBe('number')
     })
 
     it('returns a deleted relation when querying by entity', async () => {
-        const res = await axios.get(`${URL}/api/relation/entity/${DELETED_SAMPLE.entity_1}`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/relation/entity/${DELETED_SAMPLE.entity_1}`, AS_ADMIN)
         const relation = res.data.data.find(r => r.id === target_id)
         expect(relation).toBeDefined()
         expect(typeof relation.deleted_at).toBe('number')
     })
 
     it('returns a deleted relation when querying by entity id', async () => {
-        const res = await axios.get(`${URL}/api/relation/entity_id/${DELETED_SAMPLE.id_1}`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/relation/entity_id/${DELETED_SAMPLE.id_1}`, AS_ADMIN)
         const relation = res.data.data.find(r => r.id === target_id)
         expect(relation).toBeDefined()
         expect(typeof relation.deleted_at).toBe('number')
@@ -306,7 +328,7 @@ describe('PUT /api/relation/update/ deleted_at', () => {
 
     it('keeps the stored value when deleted_at is not sent', async () => {
         const before = await readRelation()
-        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(undefined), { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(undefined), AS_ADMIN)
         expect(res.status).toBe(200)
 
         const after = await readRelation()
@@ -321,7 +343,7 @@ describe('PUT /api/relation/update/ deleted_at', () => {
         //  value to be distinguishable from the previous one.
         await new Promise(resolve => setTimeout(resolve, 1100))
 
-        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(true), { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(true), AS_ADMIN)
         expect(res.status).toBe(200)
 
         const after = await readRelation()
@@ -329,7 +351,7 @@ describe('PUT /api/relation/update/ deleted_at', () => {
     })
 
     it('clears the value back to null when false is sent', async () => {
-        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(false), { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(false), AS_ADMIN)
         expect(res.status).toBe(200)
 
         const relation = await readRelation()
@@ -337,7 +359,7 @@ describe('PUT /api/relation/update/ deleted_at', () => {
     })
 
     it('stays null when false is sent on a relation that was not deleted', async () => {
-        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(false), { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/relation/update/`, buildBody(false), AS_ADMIN)
         expect(res.status).toBe(200)
 
         const relation = await readRelation()
@@ -345,7 +367,7 @@ describe('PUT /api/relation/update/ deleted_at', () => {
     })
 
     it('returns 400 warning when deleted_at is not a boolean', async () => {
-        const res = await axios.put(`${URL}/api/relation/update/`, buildBody('yes'), { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/relation/update/`, buildBody('yes'), AS_ADMIN)
         expect(res.status).toBe(400)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('relation invalid')
@@ -357,28 +379,28 @@ describe('DELETE /api/relation/id/:id (soft-delete)', () => {
 
     it('stamps deleted_at and keeps the relation readable', async () => {
         // Delete a throwaway relation so the sample relations persist in the database.
-        await axios.post(`${URL}/api/relation/`, { ...SAMPLE, note: 'throwaway-relation' }, { validateStatus: () => true })
+        await axios.post(`${URL}/api/relation/`, { ...SAMPLE, note: 'throwaway-relation' }, AS_ADMIN)
         throwaway_id = await findRelationIdByNote('throwaway-relation')
 
-        const res = await axios.delete(`${URL}/api/relation/id/${throwaway_id}`, { validateStatus: () => true })
+        const res = await axios.delete(`${URL}/api/relation/id/${throwaway_id}`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(res.data.description).toBe('relation deleted')
 
         // Soft-deleted: the row stays readable so the client can show it in a trash can.
-        const gone = await axios.get(`${URL}/api/relation/id/${throwaway_id}`, { validateStatus: () => true })
+        const gone = await axios.get(`${URL}/api/relation/id/${throwaway_id}`, AS_ADMIN)
         expect(gone.status).toBe(200)
         expect(typeof gone.data.data.deleted_at).toBe('number')
 
-        const list = await axios.get(`${URL}/api/relation/`, { validateStatus: () => true })
+        const list = await axios.get(`${URL}/api/relation/`, AS_ADMIN)
         expect(list.data.data.find(r => r.id === throwaway_id)).toBeDefined()
     })
 
     it('restores the deleted relation through the update endpoint', async () => {
-        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: throwaway_id, note: 'throwaway-relation', deleted_at: false }, { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: throwaway_id, note: 'throwaway-relation', deleted_at: false }, AS_ADMIN)
         expect(res.status).toBe(200)
 
-        const restored = await axios.get(`${URL}/api/relation/id/${throwaway_id}`, { validateStatus: () => true })
+        const restored = await axios.get(`${URL}/api/relation/id/${throwaway_id}`, AS_ADMIN)
         expect(restored.data.data.deleted_at).toBeNull()
     })
 })
@@ -403,35 +425,35 @@ const RUN = Date.now()
 
 // One wrapper per route in tag/routes.js. The tag entity is reached only through its own HTTP
 //  surface here, never through its internals.
-const tagGetAll = () => axios.get(`${URL}/api/tag/`, ANY_STATUS)
-const tagGetById = (id) => axios.get(`${URL}/api/tag/id/${id}`, ANY_STATUS)
-const tagGetByName = (name) => axios.get(`${URL}/api/tag/name/${encodeURIComponent(name)}`, ANY_STATUS)
-const tagPost = (body) => axios.post(`${URL}/api/tag/`, body, ANY_STATUS)
-const tagUpdate = (body) => axios.put(`${URL}/api/tag/update/`, body, ANY_STATUS)
-const tagDelete = (id) => axios.delete(`${URL}/api/tag/id/${id}`, ANY_STATUS)
+const tagGetAll = () => axios.get(`${URL}/api/tag/`, AS_ADMIN)
+const tagGetById = (id) => axios.get(`${URL}/api/tag/id/${id}`, AS_ADMIN)
+const tagGetByName = (name) => axios.get(`${URL}/api/tag/name/${encodeURIComponent(name)}`, AS_ADMIN)
+const tagPost = (body) => axios.post(`${URL}/api/tag/`, body, AS_ADMIN)
+const tagUpdate = (body) => axios.put(`${URL}/api/tag/update/`, body, AS_ADMIN)
+const tagDelete = (id) => axios.delete(`${URL}/api/tag/id/${id}`, AS_ADMIN)
 
-const relationPost = (body) => axios.post(`${URL}/api/relation/`, body, ANY_STATUS)
-const relationGetById = (id) => axios.get(`${URL}/api/relation/id/${id}`, ANY_STATUS)
-const relationGetByEntity = (entity) => axios.get(`${URL}/api/relation/entity/${entity}`, ANY_STATUS)
-const relationGetByEntityId = (id) => axios.get(`${URL}/api/relation/entity_id/${id}`, ANY_STATUS)
-const relationDelete = (id) => axios.delete(`${URL}/api/relation/id/${id}`, ANY_STATUS)
+const relationPost = (body) => axios.post(`${URL}/api/relation/`, body, AS_ADMIN)
+const relationGetById = (id) => axios.get(`${URL}/api/relation/id/${id}`, AS_ADMIN)
+const relationGetByEntity = (entity) => axios.get(`${URL}/api/relation/entity/${entity}`, AS_ADMIN)
+const relationGetByEntityId = (id) => axios.get(`${URL}/api/relation/entity_id/${id}`, AS_ADMIN)
+const relationDelete = (id) => axios.delete(`${URL}/api/relation/id/${id}`, AS_ADMIN)
 
 // One wrapper per permission route the blocks below need (the "permission x tag" block and the
 //  "user x permission" block further down). Like every other entity here, permission is reached
 //  only through its own HTTP surface, never through its internals.
-const permissionPost = (body) => axios.post(`${URL}/api/permission/`, body, ANY_STATUS)
-const permissionGetById = (id) => axios.get(`${URL}/api/permission/id/${id}`, ANY_STATUS)
-const permissionGetByName = (name) => axios.get(`${URL}/api/permission/name/${encodeURIComponent(name)}`, ANY_STATUS)
-const permissionUpdate = (body) => axios.put(`${URL}/api/permission/update/`, body, ANY_STATUS)
-const permissionDelete = (id) => axios.delete(`${URL}/api/permission/id/${id}`, ANY_STATUS)
+const permissionPost = (body) => axios.post(`${URL}/api/permission/`, body, AS_ADMIN)
+const permissionGetById = (id) => axios.get(`${URL}/api/permission/id/${id}`, AS_ADMIN)
+const permissionGetByName = (name) => axios.get(`${URL}/api/permission/name/${encodeURIComponent(name)}`, AS_ADMIN)
+const permissionUpdate = (body) => axios.put(`${URL}/api/permission/update/`, body, AS_ADMIN)
+const permissionDelete = (id) => axios.delete(`${URL}/api/permission/id/${id}`, AS_ADMIN)
 
 // One wrapper per route in workspace/routes.js. Like every other entity here, workspace is
 //  reached only through its own HTTP surface, never through its internals.
-const workspacePost = (body) => axios.post(`${URL}/api/workspace/`, body, ANY_STATUS)
-const workspaceGetAll = () => axios.get(`${URL}/api/workspace/`, ANY_STATUS)
-const workspaceGetById = (id) => axios.get(`${URL}/api/workspace/id/${id}`, ANY_STATUS)
-const workspaceUpdate = (body) => axios.put(`${URL}/api/workspace/update/`, body, ANY_STATUS)
-const workspaceDelete = (id) => axios.delete(`${URL}/api/workspace/id/${id}`, ANY_STATUS)
+const workspacePost = (body) => axios.post(`${URL}/api/workspace/`, body, AS_ADMIN)
+const workspaceGetAll = () => axios.get(`${URL}/api/workspace/`, AS_ADMIN)
+const workspaceGetById = (id) => axios.get(`${URL}/api/workspace/id/${id}`, AS_ADMIN)
+const workspaceUpdate = (body) => axios.put(`${URL}/api/workspace/update/`, body, AS_ADMIN)
+const workspaceDelete = (id) => axios.delete(`${URL}/api/workspace/id/${id}`, AS_ADMIN)
 
 describe('System entity catalogue coverage', () => {
     // Guard for the blocks below: each entity of the catalogue has its own block. When an
@@ -448,7 +470,7 @@ describe('System entity catalogue coverage', () => {
     })
 
     it('offers the relation types the blocks below use', async () => {
-        const res = await axios.get(`${URL}/api/relation/types/`, ANY_STATUS)
+        const res = await axios.get(`${URL}/api/relation/types/`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.data).toContain('tagged')
         expect(res.data.data).toContain('implies')
@@ -469,8 +491,8 @@ describe('directory x tag — the six tag routes with a live relation', () => {
 
     beforeAll(async () => {
         // Scaffolding: the directory only exists to be the other side of the relation.
-        await axios.post(`${URL}/api/directory/`, { name: DIRECTORY_NAME }, ANY_STATUS)
-        const directories = await axios.get(`${URL}/api/directory/`, ANY_STATUS)
+        await axios.post(`${URL}/api/directory/`, { name: DIRECTORY_NAME }, AS_ADMIN)
+        const directories = await axios.get(`${URL}/api/directory/`, AS_ADMIN)
         directory_id = directories.data.data.find(d => d.name === DIRECTORY_NAME).id
     })
 
@@ -556,7 +578,7 @@ describe('directory x tag — the six tag routes with a live relation', () => {
 
     afterAll(async () => {
         await relationDelete(relation_id)
-        await axios.delete(`${URL}/api/directory/id/${directory_id}`, ANY_STATUS)
+        await axios.delete(`${URL}/api/directory/id/${directory_id}`, AS_ADMIN)
     })
 })
 
@@ -577,8 +599,8 @@ describe('file x tag — the six tag routes with a live relation', () => {
             hash_256_sha: HASH,
             relative_path: '/rel/rel-file.png',
             extension: 'png'
-        }, ANY_STATUS)
-        const files = await axios.get(`${URL}/api/file/`, ANY_STATUS)
+        }, AS_ADMIN)
+        const files = await axios.get(`${URL}/api/file/`, AS_ADMIN)
         file_id = files.data.data.find(f => f.hash_256_sha === HASH).id
     })
 
@@ -658,7 +680,7 @@ describe('file x tag — the six tag routes with a live relation', () => {
 
     afterAll(async () => {
         await relationDelete(relation_id)
-        await axios.delete(`${URL}/api/file/id/${file_id}`, ANY_STATUS)
+        await axios.delete(`${URL}/api/file/id/${file_id}`, AS_ADMIN)
     })
 })
 
@@ -674,8 +696,8 @@ describe('metadata x tag — the six tag routes with a live relation', () => {
 
     beforeAll(async () => {
         // Scaffolding: the metadata record only exists to be the other side of the relation.
-        await axios.post(`${URL}/api/metadata/`, { name: KEY, value: 'related to a tag' }, ANY_STATUS)
-        const res = await axios.get(`${URL}/api/metadata/name/${KEY}`, ANY_STATUS)
+        await axios.post(`${URL}/api/metadata/`, { name: KEY, value: 'related to a tag' }, AS_ADMIN)
+        const res = await axios.get(`${URL}/api/metadata/name/${KEY}`, AS_ADMIN)
         metadata_id = res.data.data.id
     })
 
@@ -749,12 +771,12 @@ describe('metadata x tag — the six tag routes with a live relation', () => {
 
     it('keeps the link readable after the metadata record is soft-deleted too', async () => {
         // Both sides in the trash can: the relation is still there and still resolves.
-        await axios.delete(`${URL}/api/metadata/name/${KEY}`, ANY_STATUS)
+        await axios.delete(`${URL}/api/metadata/name/${KEY}`, AS_ADMIN)
 
         const relation = await relationGetById(relation_id)
         expect(relation.status).toBe(200)
 
-        const metadata = await axios.get(`${URL}/api/metadata/id/${relation.data.data.id_1}`, ANY_STATUS)
+        const metadata = await axios.get(`${URL}/api/metadata/id/${relation.data.data.id_1}`, AS_ADMIN)
         expect(metadata.status).toBe(200)
         expect(typeof metadata.data.data.deleted_at).toBe('number')
     })
@@ -993,8 +1015,8 @@ describe('metadata x workspace — a direct relation between two non-tag entitie
     beforeAll(async () => {
         // Scaffolding: a metadata record and a workspace record, each only existing to be one
         //  side of the relation.
-        await axios.post(`${URL}/api/metadata/`, { name: KEY, value: WORKSPACE.path_absolute }, ANY_STATUS)
-        const metadata = await axios.get(`${URL}/api/metadata/name/${KEY}`, ANY_STATUS)
+        await axios.post(`${URL}/api/metadata/`, { name: KEY, value: WORKSPACE.path_absolute }, AS_ADMIN)
+        const metadata = await axios.get(`${URL}/api/metadata/name/${KEY}`, AS_ADMIN)
         metadata_id = metadata.data.data.id
 
         await workspacePost(WORKSPACE)
@@ -1035,7 +1057,7 @@ describe('metadata x workspace — a direct relation between two non-tag entitie
     it('resolves both sides of the relation through their own routes', async () => {
         const relation = await relationGetById(relation_id)
 
-        const metadata = await axios.get(`${URL}/api/metadata/id/${relation.data.data.id_1}`, ANY_STATUS)
+        const metadata = await axios.get(`${URL}/api/metadata/id/${relation.data.data.id_1}`, AS_ADMIN)
         expect(metadata.status).toBe(200)
         expect(metadata.data.data.name).toBe(KEY)
 
@@ -1063,12 +1085,12 @@ describe('metadata x workspace — a direct relation between two non-tag entitie
     })
 
     it('keeps the link readable after the metadata record is soft-deleted', async () => {
-        await axios.delete(`${URL}/api/metadata/name/${KEY}`, ANY_STATUS)
+        await axios.delete(`${URL}/api/metadata/name/${KEY}`, AS_ADMIN)
 
         const relation = await relationGetById(relation_id)
         expect(relation.status).toBe(200)
 
-        const metadata = await axios.get(`${URL}/api/metadata/id/${relation.data.data.id_1}`, ANY_STATUS)
+        const metadata = await axios.get(`${URL}/api/metadata/id/${relation.data.data.id_1}`, AS_ADMIN)
         expect(metadata.status).toBe(200)
         expect(typeof metadata.data.data.deleted_at).toBe('number')
     })
@@ -1316,7 +1338,7 @@ describe('user x tag — the six tag routes with a live relation', () => {
         const login = await axios.post(`${URL}/api/user/login/`, {
             username: ADMIN_USERNAME,
             password: ADMIN_DEFAULT_PASSWORD
-        }, ANY_STATUS)
+        }, AS_ADMIN)
         const token = readCookie(login.headers['set-cookie'][0], SESSION_COOKIE_NAME)
         user_id = verifyToken(token).id
     })
@@ -1419,15 +1441,15 @@ describe('user x tag — the six tag routes with a live relation', () => {
 // internals, exactly like the tag blocks above.
 // --------------------------------------------------------------------------------
 
-const directoryPost = (body) => axios.post(`${URL}/api/directory/`, body, ANY_STATUS)
-const directoryGetAll = () => axios.get(`${URL}/api/directory/`, ANY_STATUS)
-const directoryGetById = (id) => axios.get(`${URL}/api/directory/id/${id}`, ANY_STATUS)
-const directoryDelete = (id) => axios.delete(`${URL}/api/directory/id/${id}`, ANY_STATUS)
+const directoryPost = (body) => axios.post(`${URL}/api/directory/`, body, AS_ADMIN)
+const directoryGetAll = () => axios.get(`${URL}/api/directory/`, AS_ADMIN)
+const directoryGetById = (id) => axios.get(`${URL}/api/directory/id/${id}`, AS_ADMIN)
+const directoryDelete = (id) => axios.delete(`${URL}/api/directory/id/${id}`, AS_ADMIN)
 
-const filePost = (body) => axios.post(`${URL}/api/file/`, body, ANY_STATUS)
-const fileGetAll = () => axios.get(`${URL}/api/file/`, ANY_STATUS)
-const fileGetById = (id) => axios.get(`${URL}/api/file/id/${id}`, ANY_STATUS)
-const fileDelete = (id) => axios.delete(`${URL}/api/file/id/${id}`, ANY_STATUS)
+const filePost = (body) => axios.post(`${URL}/api/file/`, body, AS_ADMIN)
+const fileGetAll = () => axios.get(`${URL}/api/file/`, AS_ADMIN)
+const fileGetById = (id) => axios.get(`${URL}/api/file/id/${id}`, AS_ADMIN)
+const fileDelete = (id) => axios.delete(`${URL}/api/file/id/${id}`, AS_ADMIN)
 
 describe('directory x file — "contains" and "sibling" relations', () => {
     // The scaffolding of this block: one parent directory holding a file, and a second
@@ -1667,7 +1689,7 @@ describe('user x permission — the link that grants rights', () => {
             relation_type: relation.relation_type,
             note: relation.note,
             ...changes
-        }, ANY_STATUS)
+        }, AS_ADMIN)
     }
 
     const updatePermission = async (id, changes) => {
@@ -1691,7 +1713,7 @@ describe('user x permission — the link that grants rights', () => {
         const login = await axios.post(`${URL}/api/user/login/`, {
             username: ADMIN_USERNAME,
             password: ADMIN_DEFAULT_PASSWORD
-        }, ANY_STATUS)
+        }, AS_ADMIN)
         const token = readCookie(login.headers['set-cookie'][0], SESSION_COOKIE_NAME)
         admin_user_id = verifyToken(token).id
     })
@@ -1964,5 +1986,48 @@ describe('user x permission — the link that grants rights', () => {
     afterAll(async () => {
         await relationDelete(relation_id)
         await relationDelete(distraction_id)
+    })
+})
+
+describe('the authenticate middleware guards the writes, not the reads', () => {
+    // relation is the other entity whose GET routes stayed open: the GUI resolves what contains
+    //  what, and what is tagged with what, before anyone has signed in. Writing a relation is
+    //  what needs a session.
+    it('lets an anonymous client read the listing', async () => {
+        const res = await axios.get(`${URL}/api/relation/`, ANONYMOUS)
+        expect(res.status).toBe(200)
+        expect(res.data.status).toBe('success')
+        expect(Array.isArray(res.data.data)).toBe(true)
+    })
+
+    it('lets an anonymous client read the catalogues', async () => {
+        const entities = await axios.get(`${URL}/api/relation/entities/`, ANONYMOUS)
+        expect(entities.status).toBe(200)
+        expect(entities.data.data).toEqual(SYSTEM_ENTITIES)
+
+        const types = await axios.get(`${URL}/api/relation/types/`, ANONYMOUS)
+        expect(types.status).toBe(200)
+        expect(types.data.data).toEqual(RELATION_TYPES)
+    })
+
+    it('answers 401 on a create without a session', async () => {
+        const res = await axios.post(`${URL}/api/relation/`, SAMPLE, ANONYMOUS)
+        expect(res.status).toBe(401)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('authentication required')
+    })
+
+    it('answers 401 on an update without a session', async () => {
+        const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: sample_id }, ANONYMOUS)
+        expect(res.status).toBe(401)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('authentication required')
+    })
+
+    it('answers 401 on a delete without a session', async () => {
+        const res = await axios.delete(`${URL}/api/relation/id/${sample_id}`, ANONYMOUS)
+        expect(res.status).toBe(401)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('authentication required')
     })
 })

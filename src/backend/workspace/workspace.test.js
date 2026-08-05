@@ -4,12 +4,32 @@ const URL = `http://localhost:${PORT}`
 const axios = require('axios')
 
 const workspace_repository = require('./repository')
+const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../core/constants')
 
 const SAMPLE = { name: 'home', path_absolute: '/home/v/', path_relative: 'v' }
 
-// Every request is read as data, never as an exception, so each test asserts the status code
-//  itself instead of branching on a thrown error.
-const ANY_STATUS = { validateStatus: () => true }
+// The axios config every request in this file uses.
+//
+//  `validateStatus` reads every response as data, never as an exception, so each test asserts
+//  the status code itself instead of branching on a thrown error.
+//
+//  `headers.Cookie` carries the session. Every route of this entity sits behind the
+//  `authenticate` middleware, so the suite has to drive it as a logged-in client. The cookie is
+//  only known once the server answers a login, so it is filled in by the beforeAll below and
+//  every request reads it from here.
+const AS_ADMIN = { validateStatus: () => true, headers: {} }
+
+// A request with no session at all, for the tests that check the guard itself.
+const ANONYMOUS = { validateStatus: () => true }
+
+// Signs in as the seeded admin and keeps its session cookie for the rest of the file.
+const loginAsAdmin = async () => {
+    const res = await axios.post(`${URL}/api/user/login/`, {
+        username: ADMIN_USERNAME,
+        password: ADMIN_DEFAULT_PASSWORD
+    })
+    AS_ADMIN.headers.Cookie = res.headers['set-cookie'][0].split(';')[0]
+}
 
 let created_id = ''
 
@@ -20,13 +40,14 @@ let created_id = ''
 // rest of the system lives in the relation entity, so those tests live in
 // relation/relation.test.js.
 // --------------------------------------------------------------------------------
-const workspaceGetAll = () => axios.get(`${URL}/api/workspace/`, ANY_STATUS)
-const workspaceGetById = (id) => axios.get(`${URL}/api/workspace/id/${id}`, ANY_STATUS)
-const workspacePost = (body) => axios.post(`${URL}/api/workspace/`, body, ANY_STATUS)
-const workspaceUpdate = (body) => axios.put(`${URL}/api/workspace/update/`, body, ANY_STATUS)
-const workspaceDelete = (id) => axios.delete(`${URL}/api/workspace/id/${id}`, ANY_STATUS)
+const workspaceGetAll = () => axios.get(`${URL}/api/workspace/`, AS_ADMIN)
+const workspaceGetById = (id) => axios.get(`${URL}/api/workspace/id/${id}`, AS_ADMIN)
+const workspacePost = (body) => axios.post(`${URL}/api/workspace/`, body, AS_ADMIN)
+const workspaceUpdate = (body) => axios.put(`${URL}/api/workspace/update/`, body, AS_ADMIN)
+const workspaceDelete = (id) => axios.delete(`${URL}/api/workspace/id/${id}`, AS_ADMIN)
 
-beforeAll(() => {
+beforeAll(async () => {
+    await loginAsAdmin()
     workspace_repository.deleteAll()
 })
 
@@ -263,5 +284,23 @@ describe('DELETE /api/workspace/id/:id (soft-delete)', () => {
 
         const restored = await workspaceGetById(throwaway.id)
         expect(restored.data.data.deleted_at).toBeNull()
+    })
+})
+
+describe('the authenticate middleware guards every route', () => {
+    // The guard answers before the handler runs, so the body is never even looked at: a
+    //  perfectly valid request without a session is rejected exactly like an invalid one.
+    it('answers 401 on a read without a session', async () => {
+        const res = await axios.get(`${URL}/api/workspace/`, ANONYMOUS)
+        expect(res.status).toBe(401)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('authentication required')
+    })
+
+    it('answers 401 on a write without a session', async () => {
+        const res = await axios.post(`${URL}/api/workspace/`, SAMPLE, ANONYMOUS)
+        expect(res.status).toBe(401)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('authentication required')
     })
 })

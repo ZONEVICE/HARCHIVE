@@ -4,6 +4,7 @@ const URL = `http://localhost:${PORT}`
 const axios = require('axios')
 
 const file_repository = require('./repository')
+const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../core/constants')
 
 const SAMPLE = {
     name: 'photo.jpg',
@@ -12,22 +13,46 @@ const SAMPLE = {
     extension: 'jpg'
 }
 
+// The axios config every request in this file uses.
+//
+//  `validateStatus` reads every response as data, never as an exception, so each test asserts
+//  the status code itself instead of branching on a thrown error.
+//
+//  `headers.Cookie` carries the session. Every route of this entity sits behind the
+//  `authenticate` middleware, so the suite has to drive it as a logged-in client. The cookie is
+//  only known once the server answers a login, so it is filled in by the beforeAll below and
+//  every request reads it from here.
+const AS_ADMIN = { validateStatus: () => true, headers: {} }
+
+// A request with no session at all, for the tests that check the guard itself.
+const ANONYMOUS = { validateStatus: () => true }
+
+// Signs in as the seeded admin and keeps its session cookie for the rest of the file.
+const loginAsAdmin = async () => {
+    const res = await axios.post(`${URL}/api/user/login/`, {
+        username: ADMIN_USERNAME,
+        password: ADMIN_DEFAULT_PASSWORD
+    })
+    AS_ADMIN.headers.Cookie = res.headers['set-cookie'][0].split(';')[0]
+}
+
 let created_id = ''
 
-beforeAll(() => {
+beforeAll(async () => {
+    await loginAsAdmin()
     file_repository.deleteAll()
 })
 
 describe('POST /api/file/', () => {
     it('returns 400 warning when a required string field is missing', async () => {
-        const res = await axios.post(`${URL}/api/file/`, { ...SAMPLE, name: 123 }, { validateStatus: () => true })
+        const res = await axios.post(`${URL}/api/file/`, { ...SAMPLE, name: 123 }, AS_ADMIN)
         expect(res.status).toBe(400)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('file invalid')
     })
 
     it('returns 201 on valid file', async () => {
-        const res = await axios.post(`${URL}/api/file/`, SAMPLE, { validateStatus: () => true })
+        const res = await axios.post(`${URL}/api/file/`, SAMPLE, AS_ADMIN)
         expect(res.status).toBe(201)
         expect(res.data.status).toBe('success')
         expect(res.data.description).toBe('file created')
@@ -36,7 +61,7 @@ describe('POST /api/file/', () => {
 
 describe('GET /api/file/', () => {
     it('returns 200 with a data array', async () => {
-        const res = await axios.get(`${URL}/api/file/`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/file/`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(Array.isArray(res.data.data)).toBe(true)
@@ -46,14 +71,14 @@ describe('GET /api/file/', () => {
 
 describe('GET /api/file/id/:id', () => {
     it('returns 200 with the file when found', async () => {
-        const res = await axios.get(`${URL}/api/file/id/${created_id}`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/file/id/${created_id}`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(res.data.data.id).toBe(created_id)
     })
 
     it('returns 404 when the id does not exist', async () => {
-        const res = await axios.get(`${URL}/api/file/id/nonexistent`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/file/id/nonexistent`, AS_ADMIN)
         expect(res.status).toBe(404)
         expect(res.data.status).toBe('failed')
         expect(res.data.description).toBe('file not found')
@@ -62,14 +87,14 @@ describe('GET /api/file/id/:id', () => {
 
 describe('PUT /api/file/update/', () => {
     it('returns 400 warning on invalid body', async () => {
-        const res = await axios.put(`${URL}/api/file/update/`, { ...SAMPLE, id: created_id, name: 123 }, { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/file/update/`, { ...SAMPLE, id: created_id, name: 123 }, AS_ADMIN)
         expect(res.status).toBe(400)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('file invalid')
     })
 
     it('returns 200 on valid update', async () => {
-        const res = await axios.put(`${URL}/api/file/update/`, { ...SAMPLE, id: created_id, name: 'updated.jpg' }, { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/file/update/`, { ...SAMPLE, id: created_id, name: 'updated.jpg' }, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(res.data.description).toBe('file updated')
@@ -95,13 +120,13 @@ describe('PUT /api/file/update/ deleted_at', () => {
     }
 
     const readFile = async () => {
-        const res = await axios.get(`${URL}/api/file/id/${target_id}`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/file/id/${target_id}`, AS_ADMIN)
         return res.data.data
     }
 
     beforeAll(async () => {
-        await axios.post(`${URL}/api/file/`, DELETED_SAMPLE, { validateStatus: () => true })
-        const list = await axios.get(`${URL}/api/file/`, { validateStatus: () => true })
+        await axios.post(`${URL}/api/file/`, DELETED_SAMPLE, AS_ADMIN)
+        const list = await axios.get(`${URL}/api/file/`, AS_ADMIN)
         target_id = list.data.data.find(f => f.hash_256_sha === DELETED_SAMPLE.hash_256_sha).id
     })
 
@@ -112,7 +137,7 @@ describe('PUT /api/file/update/ deleted_at', () => {
 
     it('stores the Unix Epoch in seconds when true is sent', async () => {
         const before = Math.floor(Date.now() / 1000)
-        const res = await axios.put(`${URL}/api/file/update/`, buildBody(true), { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/file/update/`, buildBody(true), AS_ADMIN)
         expect(res.status).toBe(200)
 
         const file = await readFile()
@@ -122,14 +147,14 @@ describe('PUT /api/file/update/ deleted_at', () => {
     })
 
     it('returns deleted files in the full listing', async () => {
-        const res = await axios.get(`${URL}/api/file/`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/file/`, AS_ADMIN)
         const file = res.data.data.find(f => f.id === target_id)
         expect(file).toBeDefined()
         expect(typeof file.deleted_at).toBe('number')
     })
 
     it('returns a deleted file when asked by id', async () => {
-        const res = await axios.get(`${URL}/api/file/id/${target_id}`, { validateStatus: () => true })
+        const res = await axios.get(`${URL}/api/file/id/${target_id}`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(typeof res.data.data.deleted_at).toBe('number')
@@ -137,7 +162,7 @@ describe('PUT /api/file/update/ deleted_at', () => {
 
     it('keeps the stored value when deleted_at is not sent', async () => {
         const before = await readFile()
-        const res = await axios.put(`${URL}/api/file/update/`, buildBody(undefined), { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/file/update/`, buildBody(undefined), AS_ADMIN)
         expect(res.status).toBe(200)
 
         const after = await readFile()
@@ -152,7 +177,7 @@ describe('PUT /api/file/update/ deleted_at', () => {
         // value to be distinguishable from the previous one.
         await new Promise(resolve => setTimeout(resolve, 1100))
 
-        const res = await axios.put(`${URL}/api/file/update/`, buildBody(true), { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/file/update/`, buildBody(true), AS_ADMIN)
         expect(res.status).toBe(200)
 
         const after = await readFile()
@@ -160,7 +185,7 @@ describe('PUT /api/file/update/ deleted_at', () => {
     })
 
     it('clears the value back to null when false is sent', async () => {
-        const res = await axios.put(`${URL}/api/file/update/`, buildBody(false), { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/file/update/`, buildBody(false), AS_ADMIN)
         expect(res.status).toBe(200)
 
         const file = await readFile()
@@ -168,7 +193,7 @@ describe('PUT /api/file/update/ deleted_at', () => {
     })
 
     it('stays null when false is sent on a file that was not deleted', async () => {
-        const res = await axios.put(`${URL}/api/file/update/`, buildBody(false), { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/file/update/`, buildBody(false), AS_ADMIN)
         expect(res.status).toBe(200)
 
         const file = await readFile()
@@ -176,7 +201,7 @@ describe('PUT /api/file/update/ deleted_at', () => {
     })
 
     it('returns 400 warning when deleted_at is not a boolean', async () => {
-        const res = await axios.put(`${URL}/api/file/update/`, buildBody('yes'), { validateStatus: () => true })
+        const res = await axios.put(`${URL}/api/file/update/`, buildBody('yes'), AS_ADMIN)
         expect(res.status).toBe(400)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('file invalid')
@@ -187,27 +212,27 @@ describe('DELETE /api/file/id/:id (soft-delete)', () => {
     it('stamps deleted_at and keeps the file readable', async () => {
         // Delete a throwaway file so the SAMPLE file stays in the database after the tests.
         const throwaway = { name: 'throwaway.tmp', hash_256_sha: 'throwaway-hash', relative_path: '/tmp/throwaway.tmp', extension: 'tmp' }
-        await axios.post(`${URL}/api/file/`, throwaway, { validateStatus: () => true })
+        await axios.post(`${URL}/api/file/`, throwaway, AS_ADMIN)
 
-        const list = await axios.get(`${URL}/api/file/`, { validateStatus: () => true })
+        const list = await axios.get(`${URL}/api/file/`, AS_ADMIN)
         const throwaway_id = list.data.data.find(f => f.hash_256_sha === 'throwaway-hash').id
 
-        const res = await axios.delete(`${URL}/api/file/id/${throwaway_id}`, { validateStatus: () => true })
+        const res = await axios.delete(`${URL}/api/file/id/${throwaway_id}`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(res.data.description).toBe('file deleted')
 
         // Soft-deleted: the row stays readable so the client can show it in a trash can.
-        const gone = await axios.get(`${URL}/api/file/id/${throwaway_id}`, { validateStatus: () => true })
+        const gone = await axios.get(`${URL}/api/file/id/${throwaway_id}`, AS_ADMIN)
         expect(gone.status).toBe(200)
         expect(typeof gone.data.data.deleted_at).toBe('number')
 
-        const after = await axios.get(`${URL}/api/file/`, { validateStatus: () => true })
+        const after = await axios.get(`${URL}/api/file/`, AS_ADMIN)
         expect(after.data.data.find(f => f.id === throwaway_id)).toBeDefined()
     })
 
     it('restores the deleted file through the update endpoint', async () => {
-        const list = await axios.get(`${URL}/api/file/`, { validateStatus: () => true })
+        const list = await axios.get(`${URL}/api/file/`, AS_ADMIN)
         const throwaway = list.data.data.find(f => f.hash_256_sha === 'throwaway-hash')
 
         const res = await axios.put(`${URL}/api/file/update/`, {
@@ -217,10 +242,28 @@ describe('DELETE /api/file/id/:id (soft-delete)', () => {
             relative_path: throwaway.relative_path,
             extension: throwaway.extension,
             deleted_at: false
-        }, { validateStatus: () => true })
+        }, AS_ADMIN)
         expect(res.status).toBe(200)
 
-        const restored = await axios.get(`${URL}/api/file/id/${throwaway.id}`, { validateStatus: () => true })
+        const restored = await axios.get(`${URL}/api/file/id/${throwaway.id}`, AS_ADMIN)
         expect(restored.data.data.deleted_at).toBeNull()
+    })
+})
+
+describe('the authenticate middleware guards every route', () => {
+    // The guard answers before the handler runs, so the body is never even looked at: a
+    //  perfectly valid request without a session is rejected exactly like an invalid one.
+    it('answers 401 on a read without a session', async () => {
+        const res = await axios.get(`${URL}/api/file/`, ANONYMOUS)
+        expect(res.status).toBe(401)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('authentication required')
+    })
+
+    it('answers 401 on a write without a session', async () => {
+        const res = await axios.post(`${URL}/api/file/`, SAMPLE, ANONYMOUS)
+        expect(res.status).toBe(401)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('authentication required')
     })
 })

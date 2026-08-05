@@ -194,6 +194,24 @@ describe('User Tests', () => {
                 expect(error.response.data.description).toBe('authentication required');
             }
         });
+        it('Change password rejects a session cookie that is not a valid token', async () => {
+            // The other half of the guard: `authenticate` answers the same 401 whether the
+            //  cookie is missing or carries a token it cannot verify, so a forged one buys
+            //  nothing. This is the only place the tampered-token branch is exercised.
+            //  The response is read as data rather than caught as an exception, so the
+            //  assertions run even if the endpoint ever stops rejecting it.
+            const res = await axios.post(`${URL}/api/user/changepassword/`, {
+                old_password: 'newpassword',
+                new_password: 'finalpassword'
+            }, {
+                validateStatus: () => true,
+                headers: { Cookie: `${SESSION_COOKIE_NAME}=not-a-real-token` }
+            });
+            expect(res.status).toBe(401);
+            expect(res.data.status).toBe('warning');
+            expect(res.data.description).toBe('authentication required');
+        });
+
         it('Change password is successful', async () => {
             const session_cookie = await loginAndGetCookie('newpassword'); // set by the SetPassword test
 
