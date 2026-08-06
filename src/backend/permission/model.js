@@ -2,6 +2,11 @@ class Permission {
     // The id is assigned by the database (INTEGER PRIMARY KEY) on insert, so it starts null.
     #id = null
     #name = ''
+    // Which entity the four flags below apply to: the name of one of SYSTEM_ENTITIES, or null
+    //  for a permission that applies to every entity. It defaults to null, the widest scope,
+    //  which is safe only because the four flags default to false: an unfilled permission
+    //  reaches everywhere and grants nothing.
+    #entity = null
     // The four flags default to false on purpose: a permission that was never filled in
     //  locks its users out instead of handing them administrator rights.
     #can_read = false
@@ -10,9 +15,10 @@ class Permission {
     #can_delete = false
     #deleted_at = null
 
-    setClass(id, name, can_read, can_create, can_edit, can_delete, deleted_at) {
+    setClass(id, name, entity, can_read, can_create, can_edit, can_delete, deleted_at) {
         this.#id = id
         this.#name = name
+        this.#entity = entity ?? null
         this.#can_read = can_read
         this.#can_create = can_create
         this.#can_edit = can_edit
@@ -25,6 +31,9 @@ class Permission {
 
     get name() { return this.#name }
     set name(v) { this.#name = v }
+
+    get entity() { return this.#entity }
+    set entity(v) { this.#entity = v }
 
     get can_read() { return this.#can_read }
     set can_read(v) { this.#can_read = v }

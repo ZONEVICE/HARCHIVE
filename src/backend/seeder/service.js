@@ -49,20 +49,24 @@ _.createAdminUser = () => {
 //  the trash would pass the check silently and leave the system without an administrator, and
 //  re-creating the name would hit the UNIQUE constraint and throw. A trashed default row is
 //  restored instead, keeping the flags it had.
-_.ensureDefaultPermission = (name, can_read, can_create, can_edit, can_delete) => {
+_.ensureDefaultPermission = (name, entity, can_read, can_create, can_edit, can_delete) => {
     const current = permission_service.getByName(name)
 
     if (current !== null && current.deleted_at === null) return
     if (current !== null) return permission_service.restoreFromTrashCan(current.id)
 
-    const permission = permission_service.buildForCreate({ name, can_read, can_create, can_edit, can_delete })
+    const permission = permission_service.buildForCreate({ name, entity, can_read, can_create, can_edit, can_delete })
     permission_service.create(permission)
 }
 
-// The two roles the application ships with. Idempotent: it runs on every boot.
+// The two roles the application ships with. Both are global (`entity: null`), which is what the
+//  application needs to boot: an administrator that reaches every entity, and a guest that can
+//  read every entity. Narrowing a role to one entity is what the scope column is for, but that
+//  is a decision the owner makes, not a default the seeder imposes.
+//  Idempotent: it runs on every boot.
 _.createDefaultPermissions = () => {
-    _.ensureDefaultPermission(ADMINISTRATOR_PERMISSION_NAME, true, true, true, true)
-    _.ensureDefaultPermission(GUEST_PERMISSION_NAME, true, false, false, false)
+    _.ensureDefaultPermission(ADMINISTRATOR_PERMISSION_NAME, null, true, true, true, true)
+    _.ensureDefaultPermission(GUEST_PERMISSION_NAME, null, true, false, false, false)
 
     // Fail loudly: a backend without a live administrator permission is half-initialised and
     //  must not come up at all.
@@ -91,7 +95,9 @@ _.linkAdminUser = () => {
         process.exit(1)
     }
 
-    if (permission_service.getByUserId(user.id) !== null) return
+    // Any live permission already attached is enough to leave the account alone: an admin user
+    //  deliberately moved to another permission, or given scoped ones, keeps what it has.
+    if (permission_service.getAllByUserId(user.id).length > 0) return
 
     const relation = relation_service.buildForCreate({
         id_1: user.id,

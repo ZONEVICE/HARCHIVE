@@ -1,10 +1,10 @@
 const controller = require('./controller')
-const { authenticate } = require('../web/middleware');
+const { authenticate, authorize } = require('../web/middleware');
 
 module.exports = app => {
-    app.get('/api/file/',          authenticate, controller.getAll)
-    app.get('/api/file/id/:id',    authenticate, controller.getById)
-    app.post('/api/file/',         authenticate, controller.post)
-    app.put('/api/file/update/',   authenticate, controller.update)
-    app.delete('/api/file/id/:id', authenticate, controller.deleteById)
+    app.get('/api/file/',          authenticate, authorize('read',   'file'), controller.getAll)
+    app.get('/api/file/id/:id',    authenticate, authorize('read',   'file'), controller.getById)
+    app.post('/api/file/',         authenticate, authorize('create', 'file'), controller.post)
+    app.put('/api/file/update/',   authenticate, authorize('edit',   'file'), controller.update)
+    app.delete('/api/file/id/:id', authenticate, authorize('delete', 'file'), controller.deleteById)
 }

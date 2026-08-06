@@ -43,6 +43,7 @@ const RUN = Date.now()
 
 const SAMPLE = {
     name: `test-permission-${RUN}`,
+    entity: null,
     can_read: true,
     can_create: true,
     can_edit: false,
@@ -227,6 +228,7 @@ describe('PUT /api/permission/update/', () => {
         const res = await axios.put(`${URL}/api/permission/update/`, {
             id: created_id,
             name: `test-permission-renamed-${RUN}`,
+            entity: null,
             can_read: true,
             can_create: false,
             can_edit: true,
@@ -246,6 +248,7 @@ describe('PUT /api/permission/update/', () => {
 describe('PUT /api/permission/update/ deleted_at', () => {
     const DELETED_SAMPLE = {
         name: `trash-permission-${RUN}`,
+        entity: null,
         can_read: true,
         can_create: false,
         can_edit: false,
@@ -361,6 +364,7 @@ describe('DELETE /api/permission/id/:id (soft-delete)', () => {
         const res = await axios.put(`${URL}/api/permission/update/`, {
             id: throwaway_id,
             name: `throwaway-permission-${RUN}`,
+            entity: null,
             can_read: true,
             can_create: false,
             can_edit: false,
@@ -391,5 +395,97 @@ describe('the authenticate middleware guards every route', () => {
         expect(res.status).toBe(401)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('authentication required')
+    })
+})
+
+describe('the entity column — what a permission is scoped to', () => {
+    const SCOPED = {
+        name: `test-permission-scoped-${RUN}`,
+        entity: 'tag',
+        can_read: true,
+        can_create: true,
+        can_edit: true,
+        can_delete: true
+    }
+
+    let scoped_id = ''
+
+    it('returns 201 and stores the entity a permission is scoped to', async () => {
+        const res = await axios.post(`${URL}/api/permission/`, SCOPED, AS_ADMIN)
+        expect(res.status).toBe(201)
+
+        const created = await axios.get(`${URL}/api/permission/name/${SCOPED.name}`, AS_ADMIN)
+        expect(created.data.data.entity).toBe('tag')
+
+        scoped_id = created.data.data.id
+        expect(typeof scoped_id).toBe('number')
+    })
+
+    it('stores null when the client omits the entity, so the permission applies to all', async () => {
+        // The widest scope is the default, which is only safe because the four flags default to
+        //  false: the resulting permission reaches every entity and grants nothing.
+        const res = await axios.post(`${URL}/api/permission/`, { name: `test-permission-unscoped-${RUN}` }, AS_ADMIN)
+        expect(res.status).toBe(201)
+
+        const created = await axios.get(`${URL}/api/permission/name/test-permission-unscoped-${RUN}`, AS_ADMIN)
+        expect(created.data.data.entity).toBeNull()
+    })
+
+    it('returns 400 warning when the entity is not one of SYSTEM_ENTITIES', async () => {
+        const res = await axios.post(`${URL}/api/permission/`, { ...SCOPED, name: `test-permission-bad-${RUN}`, entity: 'not-a-real-entity' }, AS_ADMIN)
+        expect(res.status).toBe(400)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('permission invalid')
+    })
+
+    it('returns 400 warning when the entity is not a string and not null', async () => {
+        const res = await axios.post(`${URL}/api/permission/`, { ...SCOPED, name: `test-permission-bad2-${RUN}`, entity: 3 }, AS_ADMIN)
+        expect(res.status).toBe(400)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('permission invalid')
+    })
+
+    it('returns 400 warning when an update leaves the entity out', async () => {
+        // This is the rule that keeps the column from being an escalation of its own: an update
+        //  replaces the whole record, so an omitted entity would silently widen a permission
+        //  scoped to one entity into a permission over every one of them.
+        const body = { id: scoped_id, name: SCOPED.name, can_read: true, can_create: true, can_edit: true, can_delete: true }
+        const res = await axios.put(`${URL}/api/permission/update/`, body, AS_ADMIN)
+        expect(res.status).toBe(400)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('permission invalid')
+    })
+
+    it('returns 400 warning when an update sends an entity outside the catalogue', async () => {
+        const body = { ...SCOPED, id: scoped_id, entity: 'not-a-real-entity' }
+        const res = await axios.put(`${URL}/api/permission/update/`, body, AS_ADMIN)
+        expect(res.status).toBe(400)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('permission invalid')
+    })
+
+    it('re-scopes a permission to another entity through the update endpoint', async () => {
+        const res = await axios.put(`${URL}/api/permission/update/`, { ...SCOPED, id: scoped_id, entity: 'file' }, AS_ADMIN)
+        expect(res.status).toBe(200)
+
+        const updated = await axios.get(`${URL}/api/permission/id/${scoped_id}`, AS_ADMIN)
+        expect(updated.data.data.entity).toBe('file')
+    })
+
+    it('widens a permission to every entity by sending entity null explicitly', async () => {
+        const res = await axios.put(`${URL}/api/permission/update/`, { ...SCOPED, id: scoped_id, entity: null }, AS_ADMIN)
+        expect(res.status).toBe(200)
+
+        const updated = await axios.get(`${URL}/api/permission/id/${scoped_id}`, AS_ADMIN)
+        expect(updated.data.data.entity).toBeNull()
+    })
+
+    it('returns the entity described by the permission table and nothing else', async () => {
+        // Guard on the shape of the row: this fails the moment a column is added, removed or
+        //  renamed in the permission schema, which is the reminder to update the rest of the entity.
+        const res = await axios.get(`${URL}/api/permission/id/${scoped_id}`, AS_ADMIN)
+        expect(Object.keys(res.data.data).sort()).toEqual(
+            ['can_create', 'can_delete', 'can_edit', 'can_read', 'deleted_at', 'entity', 'id', 'name']
+        )
     })
 })

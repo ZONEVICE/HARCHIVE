@@ -6,6 +6,7 @@ _.CREATE_TABLE = `
     CREATE TABLE IF NOT EXISTS permission (
         id         INTEGER PRIMARY KEY,
         name       TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        entity     TEXT,
         can_read   INTEGER NOT NULL DEFAULT 0,
         can_create INTEGER NOT NULL DEFAULT 0,
         can_edit   INTEGER NOT NULL DEFAULT 0,
@@ -35,9 +36,10 @@ _.getById = (id) => readRow(db.prepare('SELECT * FROM permission WHERE id = ?').
 _.getByName = (name) => readRow(db.prepare('SELECT * FROM permission WHERE name = ?').get(name))
 
 _.post = (permission) => db.prepare(
-    'INSERT INTO permission (name, can_read, can_create, can_edit, can_delete, deleted_at) VALUES (?, ?, ?, ?, ?, ?)'
+    'INSERT INTO permission (name, entity, can_read, can_create, can_edit, can_delete, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
 ).run(
     permission.name,
+    permission.entity,
     permission.can_read ? 1 : 0,
     permission.can_create ? 1 : 0,
     permission.can_edit ? 1 : 0,
@@ -46,9 +48,10 @@ _.post = (permission) => db.prepare(
 )
 
 _.update = (permission) => db.prepare(
-    'UPDATE permission SET name = ?, can_read = ?, can_create = ?, can_edit = ?, can_delete = ?, deleted_at = ? WHERE id = ?'
+    'UPDATE permission SET name = ?, entity = ?, can_read = ?, can_create = ?, can_edit = ?, can_delete = ?, deleted_at = ? WHERE id = ?'
 ).run(
     permission.name,
+    permission.entity,
     permission.can_read ? 1 : 0,
     permission.can_create ? 1 : 0,
     permission.can_edit ? 1 : 0,

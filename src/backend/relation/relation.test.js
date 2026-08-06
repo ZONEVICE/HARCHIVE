@@ -10,6 +10,9 @@ const { RELATION_TYPES } = require('./types-of-relation')
 const relation_repository = require('./repository')
 const permission_service = require('../permission/service')
 const seeder_service = require('../seeder/service')
+// No HTTP route creates a user, so the authorization block below builds its own through the
+//  user service — the entity's public surface — exactly as the seeder does.
+const user_service = require('../user/service')
 const { ADMINISTRATOR_PERMISSION_NAME } = require('../permission/util')
 
 // The axios config every request in this file uses.
@@ -1658,6 +1661,11 @@ describe('user x permission — the link that grants rights', () => {
     const USER_ID = 900001
     const SECOND_USER_ID = 900002
 
+    // Every permission in this block is global (`entity: null`), so which entity a question
+    //  names does not change the answer — it is only there because `can` always asks about one.
+    //  What a *scoped* permission does is a block of its own, further down.
+    const SOME_ENTITY = 'tag'
+
     let admin_user_id = ''
     let permission_id = ''
     let second_permission_id = ''
@@ -1669,10 +1677,10 @@ describe('user x permission — the link that grants rights', () => {
     // Every right denied. It is the answer for a user with no link, with a trashed link and
     //  with a trashed permission, and each of those is asserted separately below.
     const expectEverythingDenied = (user_id) => {
-        expect(permission_service.can(user_id, 'read')).toBe(false)
-        expect(permission_service.can(user_id, 'create')).toBe(false)
-        expect(permission_service.can(user_id, 'edit')).toBe(false)
-        expect(permission_service.can(user_id, 'delete')).toBe(false)
+        expect(permission_service.can(user_id, 'read', SOME_ENTITY)).toBe(false)
+        expect(permission_service.can(user_id, 'create', SOME_ENTITY)).toBe(false)
+        expect(permission_service.can(user_id, 'edit', SOME_ENTITY)).toBe(false)
+        expect(permission_service.can(user_id, 'delete', SOME_ENTITY)).toBe(false)
     }
 
     // The update endpoint replaces the whole record, so changing one field means sending the
@@ -1698,6 +1706,7 @@ describe('user x permission — the link that grants rights', () => {
         return permissionUpdate({
             id: permission.id,
             name: permission.name,
+            entity: permission.entity,
             can_read: permission.can_read,
             can_create: permission.can_create,
             can_edit: permission.can_edit,
@@ -1753,16 +1762,16 @@ describe('user x permission — the link that grants rights', () => {
     })
 
     it('grants the admin user all four verbs', () => {
-        expect(permission_service.can(admin_user_id, 'read')).toBe(true)
-        expect(permission_service.can(admin_user_id, 'create')).toBe(true)
-        expect(permission_service.can(admin_user_id, 'edit')).toBe(true)
-        expect(permission_service.can(admin_user_id, 'delete')).toBe(true)
+        expect(permission_service.can(admin_user_id, 'read', SOME_ENTITY)).toBe(true)
+        expect(permission_service.can(admin_user_id, 'create', SOME_ENTITY)).toBe(true)
+        expect(permission_service.can(admin_user_id, 'edit', SOME_ENTITY)).toBe(true)
+        expect(permission_service.can(admin_user_id, 'delete', SOME_ENTITY)).toBe(true)
     })
 
     it('denies a verb that is not one of the four', () => {
-        expect(permission_service.can(admin_user_id, 'download')).toBe(false)
-        expect(permission_service.can(admin_user_id, '')).toBe(false)
-        expect(permission_service.can(admin_user_id, undefined)).toBe(false)
+        expect(permission_service.can(admin_user_id, 'download', SOME_ENTITY)).toBe(false)
+        expect(permission_service.can(admin_user_id, '', SOME_ENTITY)).toBe(false)
+        expect(permission_service.can(admin_user_id, undefined, SOME_ENTITY)).toBe(false)
     })
 
     // ----------------------------------------------------------------------------
@@ -1770,7 +1779,7 @@ describe('user x permission — the link that grants rights', () => {
     // ----------------------------------------------------------------------------
 
     it('resolves no permission for a user nothing points at', () => {
-        expect(permission_service.getByUserId(USER_ID)).toBeNull()
+        expect(permission_service.getAllByUserId(USER_ID)).toEqual([])
     })
 
     it('denies every verb to a user with no permission attached', () => {
@@ -1797,7 +1806,7 @@ describe('user x permission — the link that grants rights', () => {
         distraction_id = await findRelationIdByNote(DISTRACTION_NOTE)
         expect(typeof distraction_id).toBe('number')
 
-        expect(permission_service.getByUserId(USER_ID)).toBeNull()
+        expect(permission_service.getAllByUserId(USER_ID)).toEqual([])
         expectEverythingDenied(USER_ID)
     })
 
@@ -1846,17 +1855,17 @@ describe('user x permission — the link that grants rights', () => {
     })
 
     it('resolves the permission through the link', () => {
-        const permission = permission_service.getByUserId(USER_ID)
+        const permission = permission_service.getAllByUserId(USER_ID)[0]
         expect(permission).not.toBeNull()
         expect(permission.id).toBe(permission_id)
         expect(permission.name).toBe(PERMISSION_NAME)
     })
 
     it('grants exactly the verbs the linked permission carries', () => {
-        expect(permission_service.can(USER_ID, 'read')).toBe(true)
-        expect(permission_service.can(USER_ID, 'create')).toBe(false)
-        expect(permission_service.can(USER_ID, 'edit')).toBe(false)
-        expect(permission_service.can(USER_ID, 'delete')).toBe(false)
+        expect(permission_service.can(USER_ID, 'read', SOME_ENTITY)).toBe(true)
+        expect(permission_service.can(USER_ID, 'create', SOME_ENTITY)).toBe(false)
+        expect(permission_service.can(USER_ID, 'edit', SOME_ENTITY)).toBe(false)
+        expect(permission_service.can(USER_ID, 'delete', SOME_ENTITY)).toBe(false)
     })
 
     it('GET /api/relation/entity_id/:id finds the link from the user side', async () => {
@@ -1877,10 +1886,10 @@ describe('user x permission — the link that grants rights', () => {
         const res = await updatePermission(permission_id, { can_create: true, can_edit: true })
         expect(res.status).toBe(200)
 
-        expect(permission_service.can(USER_ID, 'read')).toBe(true)
-        expect(permission_service.can(USER_ID, 'create')).toBe(true)
-        expect(permission_service.can(USER_ID, 'edit')).toBe(true)
-        expect(permission_service.can(USER_ID, 'delete')).toBe(false)
+        expect(permission_service.can(USER_ID, 'read', SOME_ENTITY)).toBe(true)
+        expect(permission_service.can(USER_ID, 'create', SOME_ENTITY)).toBe(true)
+        expect(permission_service.can(USER_ID, 'edit', SOME_ENTITY)).toBe(true)
+        expect(permission_service.can(USER_ID, 'delete', SOME_ENTITY)).toBe(false)
 
         const link = await relationGetById(relation_id)
         expect(link.data.data.id_2).toBe(permission_id)
@@ -1893,9 +1902,9 @@ describe('user x permission — the link that grants rights', () => {
         const link = await relationGetById(relation_id)
         expect(link.data.data.id_2).toBe(permission_id)
 
-        const permission = permission_service.getByUserId(USER_ID)
+        const permission = permission_service.getAllByUserId(USER_ID)[0]
         expect(permission.name).toBe(RENAMED_PERMISSION)
-        expect(permission_service.can(USER_ID, 'read')).toBe(true)
+        expect(permission_service.can(USER_ID, 'read', SOME_ENTITY)).toBe(true)
     })
 
     it('revokes every right when the link is soft-deleted', async () => {
@@ -1906,7 +1915,7 @@ describe('user x permission — the link that grants rights', () => {
         const permission = await permissionGetById(permission_id)
         expect(permission.data.data.deleted_at).toBeNull()
 
-        expect(permission_service.getByUserId(USER_ID)).toBeNull()
+        expect(permission_service.getAllByUserId(USER_ID)).toEqual([])
         expectEverythingDenied(USER_ID)
     })
 
@@ -1914,8 +1923,8 @@ describe('user x permission — the link that grants rights', () => {
         const res = await updateRelation(relation_id, { deleted_at: false })
         expect(res.status).toBe(200)
 
-        expect(permission_service.can(USER_ID, 'read')).toBe(true)
-        expect(permission_service.can(USER_ID, 'create')).toBe(true)
+        expect(permission_service.can(USER_ID, 'read', SOME_ENTITY)).toBe(true)
+        expect(permission_service.can(USER_ID, 'create', SOME_ENTITY)).toBe(true)
     })
 
     it('revokes every right when the permission is soft-deleted, link intact', async () => {
@@ -1927,7 +1936,7 @@ describe('user x permission — the link that grants rights', () => {
         expect(link.data.data.deleted_at).toBeNull()
         expect(link.data.data.id_2).toBe(permission_id)
 
-        expect(permission_service.getByUserId(USER_ID)).toBeNull()
+        expect(permission_service.getAllByUserId(USER_ID)).toEqual([])
         expectEverythingDenied(USER_ID)
     })
 
@@ -1935,9 +1944,9 @@ describe('user x permission — the link that grants rights', () => {
         const res = await updatePermission(permission_id, { deleted_at: false })
         expect(res.status).toBe(200)
 
-        expect(permission_service.can(USER_ID, 'read')).toBe(true)
-        expect(permission_service.can(USER_ID, 'create')).toBe(true)
-        expect(permission_service.can(USER_ID, 'delete')).toBe(false)
+        expect(permission_service.can(USER_ID, 'read', SOME_ENTITY)).toBe(true)
+        expect(permission_service.can(USER_ID, 'create', SOME_ENTITY)).toBe(true)
+        expect(permission_service.can(USER_ID, 'delete', SOME_ENTITY)).toBe(false)
     })
 
     it('changes the rights when the link is pointed at another permission', async () => {
@@ -1956,8 +1965,8 @@ describe('user x permission — the link that grants rights', () => {
         const res = await updateRelation(relation_id, { id_2: second_permission_id })
         expect(res.status).toBe(200)
 
-        expect(permission_service.getByUserId(USER_ID).id).toBe(second_permission_id)
-        expect(permission_service.can(USER_ID, 'delete')).toBe(true)
+        expect(permission_service.getAllByUserId(USER_ID)[0].id).toBe(second_permission_id)
+        expect(permission_service.can(USER_ID, 'delete', SOME_ENTITY)).toBe(true)
     })
 
     it('is a role, not a per-user record: a second user linked to the same row gets the same rights', async () => {
@@ -1974,13 +1983,13 @@ describe('user x permission — the link that grants rights', () => {
         second_relation_id = await findRelationIdByNote(SECOND_NOTE)
         expect(typeof second_relation_id).toBe('number')
 
-        expect(permission_service.getByUserId(SECOND_USER_ID).id).toBe(second_permission_id)
-        expect(permission_service.can(SECOND_USER_ID, 'delete')).toBe(true)
+        expect(permission_service.getAllByUserId(SECOND_USER_ID)[0].id).toBe(second_permission_id)
+        expect(permission_service.can(SECOND_USER_ID, 'delete', SOME_ENTITY)).toBe(true)
 
         // And revoking one user's link leaves the other one alone.
         await relationDelete(second_relation_id)
         expectEverythingDenied(SECOND_USER_ID)
-        expect(permission_service.can(USER_ID, 'delete')).toBe(true)
+        expect(permission_service.can(USER_ID, 'delete', SOME_ENTITY)).toBe(true)
     })
 
     afterAll(async () => {
@@ -2029,5 +2038,253 @@ describe('the authenticate middleware guards the writes, not the reads', () => {
         expect(res.status).toBe(401)
         expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('authentication required')
+    })
+})
+
+// --------------------------------------------------------------------------------
+// Authorization over HTTP: what the `authorize` middleware actually lets through.
+//
+// The block above proves the resolution rules by calling permission_service.can directly.
+// This one proves the rules are *wired*, by driving the real routes as a real user whose
+// rights change underneath it. It is the only block in the suite that signs in as somebody
+// other than the seeded admin.
+// --------------------------------------------------------------------------------
+describe('scoped permissions — what a user may do, entity by entity', () => {
+    const WEAK_USERNAME = `rel-weak-user-${RUN}`
+    const WEAK_PASSWORD = 'weak-password'
+
+    const TAG_READER = `rel-scope-tag-reader-${RUN}`
+    const GLOBAL_READER = `rel-scope-global-reader-${RUN}`
+    const PERMISSION_DENIER = `rel-scope-permission-denier-${RUN}`
+
+    let weak_user_id = ''
+    let tag_reader_id = ''
+    let global_reader_id = ''
+    let permission_denier_id = ''
+
+    // The weak user's own session. Same shape as AS_ADMIN, a different account inside.
+    const AS_WEAK = { validateStatus: () => true, headers: {} }
+
+    // Creates a permission through the API (as the admin) and returns its id.
+    const createPermission = async (body) => {
+        const created = await permissionPost(body)
+        expect(created.status).toBe(201)
+        const read = await permissionGetByName(body.name)
+        return read.data.data.id
+    }
+
+    // Attaches a permission to the weak user with the `linked` relation the chain is built on.
+    const grantToWeakUser = async (permission_id, note) => {
+        const res = await relationPost({
+            id_1: weak_user_id,
+            entity_1: 'user',
+            id_2: permission_id,
+            entity_2: 'permission',
+            relation_type: 'linked',
+            note
+        })
+        expect(res.status).toBe(201)
+    }
+
+    beforeAll(async () => {
+        // No endpoint creates a user, so this goes through the service, like the seeder does.
+        //  The username carries the per-run suffix because user.username is not UNIQUE and this
+        //  file must not depend on an earlier run having been cleaned up.
+        const user = user_service.buildForCreate({ username: WEAK_USERNAME, password: WEAK_PASSWORD })
+        user_service.create(user)
+
+        // The id travels inside the session token and nowhere else, so signing in is the way to it.
+        const login = await axios.post(`${URL}/api/user/login/`, {
+            username: WEAK_USERNAME,
+            password: WEAK_PASSWORD
+        }, AS_WEAK)
+        const cookie = login.headers['set-cookie'][0]
+        AS_WEAK.headers.Cookie = cookie.split(';')[0]
+        weak_user_id = verifyToken(readCookie(cookie, SESSION_COOKIE_NAME)).id
+    })
+
+    // ----------------------------------------------------------------------------
+    // A signed-in user with nothing attached.
+    // ----------------------------------------------------------------------------
+
+    it('signs the weak user in and resolves its id', () => {
+        expect(typeof weak_user_id).toBe('number')
+        expect(weak_user_id).not.toBe(0)
+    })
+
+    it('holds a valid session that is simply not authorized for anything', async () => {
+        // The distinction the two guards draw: this is a 403, not a 401. The session is real.
+        const res = await axios.get(`${URL}/api/tag/`, AS_WEAK)
+        expect(res.status).toBe(403)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('permission denied')
+    })
+
+    it('is refused by every entity that lists authorize, one by one', async () => {
+        // This is the wiring guard. If a routes.js ever drops its authorize, the matching line
+        //  here answers 200 instead of 403 and the suite says which entity it was.
+        expect((await axios.get(`${URL}/api/directory/`, AS_WEAK)).status).toBe(403)
+        expect((await axios.get(`${URL}/api/file/`, AS_WEAK)).status).toBe(403)
+        expect((await axios.get(`${URL}/api/tag/`, AS_WEAK)).status).toBe(403)
+        expect((await axios.get(`${URL}/api/permission/`, AS_WEAK)).status).toBe(403)
+        expect((await axios.get(`${URL}/api/workspace/`, AS_WEAK)).status).toBe(403)
+        expect((await axios.post(`${URL}/api/metadata/`, { name: `denied-${RUN}`, value: 'x' }, AS_WEAK)).status).toBe(403)
+        expect((await axios.post(`${URL}/api/relation/`, SAMPLE, AS_WEAK)).status).toBe(403)
+    })
+
+    it('still reads the routes that stayed public', async () => {
+        // metadata and relation keep their GET routes open, and no permission is consulted for
+        //  them at all — not even a denied one.
+        expect((await axios.get(`${URL}/api/metadata/`, AS_WEAK)).status).toBe(200)
+        expect((await axios.get(`${URL}/api/relation/`, AS_WEAK)).status).toBe(200)
+        expect((await axios.get(`${URL}/api/relation/entities/`, AS_WEAK)).status).toBe(200)
+    })
+
+    // ----------------------------------------------------------------------------
+    // A permission scoped to one entity.
+    // ----------------------------------------------------------------------------
+
+    it('grants a tag-scoped read permission and nothing else', async () => {
+        tag_reader_id = await createPermission({
+            name: TAG_READER,
+            entity: 'tag',
+            can_read: true,
+            can_create: false,
+            can_edit: false,
+            can_delete: false
+        })
+        await grantToWeakUser(tag_reader_id, `relation-test: weak user <-> tag reader ${RUN}`)
+
+        expect(permission_service.can(weak_user_id, 'read', 'tag')).toBe(true)
+    })
+
+    it('lets the user read tags now', async () => {
+        const res = await axios.get(`${URL}/api/tag/`, AS_WEAK)
+        expect(res.status).toBe(200)
+        expect(res.data.status).toBe('success')
+    })
+
+    it('still refuses to let it create a tag, because only can_read is set', async () => {
+        const res = await axios.post(`${URL}/api/tag/`, { name: `weak-tag-${RUN}` }, AS_WEAK)
+        expect(res.status).toBe(403)
+        expect(res.data.description).toBe('permission denied')
+    })
+
+    it('does not leak the scope onto another entity', async () => {
+        // The whole point of the column: a permission over tags says nothing about files.
+        expect((await axios.get(`${URL}/api/file/`, AS_WEAK)).status).toBe(403)
+        expect((await axios.get(`${URL}/api/directory/`, AS_WEAK)).status).toBe(403)
+    })
+
+    // ----------------------------------------------------------------------------
+    // A global permission underneath the scoped one.
+    // ----------------------------------------------------------------------------
+
+    it('adds a global read permission, and the other entities open up', async () => {
+        global_reader_id = await createPermission({
+            name: GLOBAL_READER,
+            entity: null,
+            can_read: true,
+            can_create: false,
+            can_edit: true,
+            can_delete: false
+        })
+        await grantToWeakUser(global_reader_id, `relation-test: weak user <-> global reader ${RUN}`)
+
+        expect((await axios.get(`${URL}/api/file/`, AS_WEAK)).status).toBe(200)
+        expect((await axios.get(`${URL}/api/directory/`, AS_WEAK)).status).toBe(200)
+        expect((await axios.get(`${URL}/api/workspace/`, AS_WEAK)).status).toBe(200)
+    })
+
+    it('lets the scoped permission decide for its own entity, even against the global one', async () => {
+        // The global row grants can_edit; the tag-scoped row does not. For tags, the scoped row
+        //  is the answer — that is "the most specific grant decides", and it decides both ways.
+        expect(permission_service.can(weak_user_id, 'edit', 'file')).toBe(true)
+        expect(permission_service.can(weak_user_id, 'edit', 'tag')).toBe(false)
+
+        const res = await axios.put(`${URL}/api/tag/update/`, { id: 1, name: 'whatever', metadata: '{}' }, AS_WEAK)
+        expect(res.status).toBe(403)
+    })
+
+    // ----------------------------------------------------------------------------
+    // The escalation this column exists to close.
+    // ----------------------------------------------------------------------------
+
+    it('can reach the permission entity while only the global permission answers for it', async () => {
+        // Before the denial below: the global row grants read and edit, and nothing is scoped to
+        //  `permission`, so the user can read the roles and edit them. This is the hole.
+        expect((await axios.get(`${URL}/api/permission/`, AS_WEAK)).status).toBe(200)
+        expect(permission_service.can(weak_user_id, 'edit', 'permission')).toBe(true)
+    })
+
+    it('shuts the door with a permission-scoped denial, without touching the global row', async () => {
+        permission_denier_id = await createPermission({
+            name: PERMISSION_DENIER,
+            entity: 'permission',
+            can_read: false,
+            can_create: false,
+            can_edit: false,
+            can_delete: false
+        })
+        await grantToWeakUser(permission_denier_id, `relation-test: weak user <-> permission denier ${RUN}`)
+
+        // "Read everything except permission", which is exactly what the flat model could not say.
+        expect((await axios.get(`${URL}/api/file/`, AS_WEAK)).status).toBe(200)
+        expect((await axios.get(`${URL}/api/permission/`, AS_WEAK)).status).toBe(403)
+    })
+
+    it('stops the user from editing any permission, its own included', async () => {
+        // The escalation in full: with can_edit granted globally, this PUT used to be the way to
+        //  hand yourself the four flags. The scoped denial answers first, so it is a 403.
+        const res = await axios.put(`${URL}/api/permission/update/`, {
+            id: global_reader_id,
+            name: GLOBAL_READER,
+            entity: null,
+            can_read: true,
+            can_create: true,
+            can_edit: true,
+            can_delete: true
+        }, AS_WEAK)
+        expect(res.status).toBe(403)
+        expect(res.data.description).toBe('permission denied')
+
+        // And the row it aimed at is untouched.
+        const unchanged = await permissionGetById(global_reader_id)
+        expect(unchanged.data.data.can_create).toBe(false)
+        expect(unchanged.data.data.can_delete).toBe(false)
+    })
+
+    it('leaves the relation door open until relation is scoped too', async () => {
+        // The second way in, and the one that is easy to miss: rights *are* a relation record,
+        //  so a user who may edit relations can re-point its own link at the administrator
+        //  permission and never touch the permission entity at all. Nothing is scoped to
+        //  `relation` yet, so the global row answers — and it grants can_edit.
+        expect(permission_service.can(weak_user_id, 'edit', 'relation')).toBe(true)
+
+        // Shutting it is the same one row that shut the permission door.
+        const relation_denier_id = await createPermission({
+            name: `rel-scope-relation-denier-${RUN}`,
+            entity: 'relation',
+            can_read: false,
+            can_create: false,
+            can_edit: false,
+            can_delete: false
+        })
+        await grantToWeakUser(relation_denier_id, `relation-test: weak user <-> relation denier ${RUN}`)
+
+        expect(permission_service.can(weak_user_id, 'edit', 'relation')).toBe(false)
+
+        // The guard answers before the handler, so the body never has to name a real record.
+        const res = await axios.put(`${URL}/api/relation/update/`, {
+            id: 999999,
+            id_1: weak_user_id,
+            entity_1: 'user',
+            id_2: 1,
+            entity_2: 'permission',
+            relation_type: 'linked',
+            note: `hijack attempt ${RUN}`
+        }, AS_WEAK)
+        expect(res.status).toBe(403)
+        expect(res.data.description).toBe('permission denied')
     })
 })

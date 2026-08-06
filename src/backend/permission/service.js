@@ -1,6 +1,7 @@
 const Permission = require('./model')
 const repository = require('./repository')
 const { getSystemTime } = require('../core/time')
+const { SYSTEM_ENTITIES } = require('../core/constants')
 
 // A permission is attached to a user through a relation record, never through a column, so
 //  resolving one spans two entities. The other entity is reached through its service — its
@@ -34,10 +35,12 @@ _.resolveDeletedAt = (current, deleted_at_flag) => {
 }
 
 // Builds a Permission from a create request. The id is assigned by the database and deleted_at
-//  defaults to null; a flag the client omits keeps the model default, which is false.
+//  defaults to null; a flag the client omits keeps the model default, which is false, and an
+//  omitted entity keeps the model default too, which is null — the permission applies to all.
 _.buildForCreate = (body) => {
     const permission = new Permission()
     permission.name = body.name
+    if (body.entity !== undefined) permission.entity = body.entity
     if (body.can_read !== undefined) permission.can_read = body.can_read
     if (body.can_create !== undefined) permission.can_create = body.can_create
     if (body.can_edit !== undefined) permission.can_edit = body.can_edit
@@ -50,7 +53,7 @@ _.buildForCreate = (body) => {
 _.buildForUpdate = (current, body) => {
     const deleted_at = _.resolveDeletedAt(current, body.deleted_at)
     const permission = new Permission()
-    permission.setClass(body.id, body.name, body.can_read, body.can_create, body.can_edit, body.can_delete, deleted_at)
+    permission.setClass(body.id, body.name, body.entity, body.can_read, body.can_create, body.can_edit, body.can_delete, deleted_at)
     return permission
 }
 
@@ -78,11 +81,14 @@ _.hardDelete = (id) => repository.deleteById(id)
 //  that attachment is a relation record: user (id_1) linked to permission (id_2).
 // --------------------------------------------------------------------------------
 
-// The live permission of a user, or null when there is none. Three separate things make it
-//  null, and every one of them means "no rights at all": no link, a link sitting in the trash,
-//  or a permission sitting in the trash.
-_.getByUserId = (user_id) => {
+// Every live permission attached to a user, in the order the relations come back. A user holds
+//  as many as there are links pointing at them: one global row and any number of scoped ones is
+//  the shape this is built for. The list is empty when nothing grants the user anything, and
+//  three separate things put a row out of it — a link in the trash, a permission in the trash,
+//  or a link that points at something other than a permission.
+_.getAllByUserId = (user_id) => {
     const relations = relation_service.getByEntityId(user_id)
+    const permissions = []
 
     for (const relation of relations) {
         if (relation.deleted_at !== null) continue
@@ -94,19 +100,15 @@ _.getByUserId = (user_id) => {
         if (permission === null) continue
         if (permission.deleted_at !== null) continue
 
-        return permission
+        permissions.push(permission)
     }
 
-    return null
+    return permissions
 }
 
-// Answers whether a user may perform a verb. Every unknown case denies: a user without a
-//  permission, a soft-deleted one and an unknown verb are all explicit branches here, never
-//  an accident of undefined being falsy.
-_.can = (user_id, verb) => {
-    const permission = _.getByUserId(user_id)
-    if (permission === null) return false
-
+// Reads one verb off one permission row. Unknown verbs deny, so a typo in a route never grants
+//  anything by way of `undefined` being falsy.
+const readVerb = (permission, verb) => {
     if (verb === 'read') return permission.can_read
     if (verb === 'create') return permission.can_create
     if (verb === 'edit') return permission.can_edit
@@ -115,4 +117,34 @@ _.can = (user_id, verb) => {
     return false
 }
 
+// Answers whether a user may perform a verb on an entity.
+//
+// The rule is **the most specific grant decides**, in two passes:
+//
+//   1. A permission scoped to this very entity answers on its own — even when it says no. That
+//      is what makes "read everything except permission" expressible: a global row granting
+//      read, plus a row scoped to `permission` denying it.
+//   2. Otherwise the global permission (entity null) answers, if the user holds one.
+//
+// Everything else denies. A user with no permission at all, a verb outside the four, and an
+//  entity outside SYSTEM_ENTITIES are each their own branch. That last one matters: it turns a
+//  typo in a routes.js — `authorize('read', 'tags')` — into a visible 403 instead of a silent
+//  fall-through to whatever the global permission happens to say.
+_.can = (user_id, verb, entity) => {
+    if (!SYSTEM_ENTITIES.includes(entity)) return false
+
+    const permissions = _.getAllByUserId(user_id)
+
+    for (const permission of permissions) {
+        if (permission.entity === entity) return readVerb(permission, verb)
+    }
+
+    for (const permission of permissions) {
+        if (permission.entity === null) return readVerb(permission, verb)
+    }
+
+    return false
+}
+
 module.exports = _
+ 
