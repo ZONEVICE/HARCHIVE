@@ -44,4 +44,15 @@ seeder_service.seed();
 const app = require('./web/app');
 const { PORT } = require('./core/env');
 
-app.listen(PORT, () => { console.log(`HARCHIVE backend listening on port: ${PORT}.`); });
+const server = app.listen(PORT, (error) => {
+    if (error) {
+        console.error(`Error: the web server could not listen on port ${PORT}:`, error.message);
+        process.exit(1);
+    }
+    console.log(`HARCHIVE backend listening on port: ${PORT}.`);
+});
+
+server.on('error', (error) => {
+    console.error('Error: the web server stopped listening:', error.message);
+    process.exit(1);
+});
