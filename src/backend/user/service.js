@@ -33,6 +33,10 @@ _.buildForCreate = (body) => {
 //  Returns null when the username does not exist or when the password does not match,
 //  the same answer in both cases so nobody can probe which usernames are registered.
 //  On success it returns a signed session token carrying the user id.
+//  The username is matched case-insensitively — `vice` signs into the `ViCe` account — and
+//  nothing here spells that out because nothing here has to: the rule lives in the column's
+//  COLLATE NOCASE, so the lookup below already carries it. The password is *not* covered by
+//  any of this and is compared exactly, in JavaScript.
 _.login = (username, password) => {
     const user = repository.getByUsername(username)
     if (user === null) return null

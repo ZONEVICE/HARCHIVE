@@ -5,8 +5,11 @@ const _ = {};
 const Model = require('./model');
 const { ADMIN_USERNAME } = require('../core/constants');
 
-// username is UNIQUE and case-insensitive: two accounts differing only in case would be two
-//  logins a human reads as the same one, and login resolves an account by this column.
+// username is UNIQUE and case-insensitive. The collation sits on the column, so it decides two
+//  things at once, both of them wanted: no second account may differ only in case, and every
+//  `WHERE username = ?` in this file matches whatever the caller typed. That second half is the
+//  login rule the owner asked for — `vice`, `ViCe` and `VICE` are one account, and signing in
+//  works with any of them.
 _.CREATE_TABLE = `
     CREATE TABLE IF NOT EXISTS user (
         id       INTEGER PRIMARY KEY,

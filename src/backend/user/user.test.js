@@ -12,7 +12,18 @@ const user_model = require('./model');
 // The admin account is seed data, so creating it belongs to the seeder entity, not to this one.
 const seeder_service = require('../seeder/service');
 
+// The admin username spelled in a case nobody would type by accident — neither .toLowerCase()
+//  nor .toUpperCase() of the stored name produces it. Signing in with it must reach the same
+//  account: username is UNIQUE COLLATE NOCASE, so every lookup on that column ignores case.
+const ADMIN_USERNAME_MIXED_CASE = 'vIcE';
+
 describe('User Tests', () => {
+    it('The mixed-case username is the admin name, spelled differently', () => {
+        // Guards the constant above: if ADMIN_USERNAME ever changes, the tests using it fail
+        //  here with a clear reason instead of silently testing an unknown account.
+        expect(ADMIN_USERNAME_MIXED_CASE).not.toBe(ADMIN_USERNAME);
+        expect(ADMIN_USERNAME_MIXED_CASE.toUpperCase()).toBe(ADMIN_USERNAME.toUpperCase());
+    });
     it('DROP and CREATE table for testing', async () => {
         await user_repository.dropTable();
         await user_repository.createTable();
@@ -74,6 +85,15 @@ describe('User Tests', () => {
             expect(user).not.toBeNull();
             expect(user.username).toBe(ADMIN_USERNAME);
         });
+        it('Resolves the account whatever the case', () => {
+            user_repository.createTable();
+            seeder_service.createAdminUser();
+            const user = user_repository.getByUsername(ADMIN_USERNAME_MIXED_CASE);
+            expect(user).not.toBeNull();
+            // The row comes back spelled as it was stored, not as it was asked for: the
+            //  collation decides how the name is matched, never how it is kept.
+            expect(user.username).toBe(ADMIN_USERNAME);
+        });
         it('Not found', () => {
             user_repository.createTable();
             const user = user_repository.getByUsername('NOBODY');
@@ -124,6 +144,28 @@ describe('User Tests', () => {
             expect(Array.isArray(cookies)).toBe(true);
             expect(cookies[0]).toContain(`${SESSION_COOKIE_NAME}=`);
             expect(cookies[0]).toContain('HttpOnly');
+        });
+        it('Login succeeds with the username in another case', async () => {
+            // The rule this entity is built for: `vice` signs into the `ViCe` account. It is the
+            //  column's COLLATE NOCASE doing it, so this test is what stops a future rewrite of
+            //  the schema from taking the collation out without anybody noticing.
+            const res = await axios.post(`${URL}/api/user/login/`, {
+                username: ADMIN_USERNAME_MIXED_CASE,
+                password: 'newpassword'
+            });
+            expect(res.data.status).toBe('success');
+            expect(res.data.description).toBe('login successful');
+        });
+        it('Login still requires the exact password', async () => {
+            // Only the username is case-insensitive. The password is compared in JavaScript,
+            //  where no collation applies.
+            const res = await axios.post(`${URL}/api/user/login/`, {
+                username: ADMIN_USERNAME,
+                password: 'NEWPASSWORD'
+            }, { validateStatus: () => true });
+            expect(res.status).toBe(401);
+            expect(res.data.status).toBe('warning');
+            expect(res.data.description).toBe('invalid credentials');
         });
         it('Login fails with invalid credentials', async () => {
             try {
