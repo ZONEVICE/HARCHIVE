@@ -84,14 +84,22 @@ _.hardDelete = (id) => repository.deleteById(id)
 // Every live permission attached to a user, in the order the relations come back. A user holds
 //  as many as there are links pointing at them: one global row and any number of scoped ones is
 //  the shape this is built for. The list is empty when nothing grants the user anything, and
-//  three separate things put a row out of it — a link in the trash, a permission in the trash,
-//  or a link that points at something other than a permission.
+//  four separate things put a row out of it — a link in the trash, a permission in the trash,
+//  a link that points at something other than a permission, or a link of the wrong type.
+//
+//  That last one is why relation_type is checked here. Every relation type is legitimate between
+//  a user and a permission, as it is between any two entities — nothing in the model forbids
+//  tagging a permission. But only `linked` *means* "this user holds this permission": a relation
+//  type carries logical weight, the way `contains` means a file sits inside a directory. Reading
+//  any type as a grant would also hand a second, quieter way of moving rights around to anyone
+//  who can create relations.
 _.getAllByUserId = (user_id) => {
     const relations = relation_service.getByEntityId(user_id)
     const permissions = []
 
     for (const relation of relations) {
         if (relation.deleted_at !== null) continue
+        if (relation.relation_type !== 'linked') continue
         if (relation.entity_1 !== 'user') continue
         if (relation.id_1 !== user_id) continue
         if (relation.entity_2 !== 'permission') continue
@@ -119,12 +127,21 @@ const readVerb = (permission, verb) => {
 
 // Answers whether a user may perform a verb on an entity.
 //
-// The rule is **the most specific grant decides**, in two passes:
+// Two rules decide, in this order:
 //
-//   1. A permission scoped to this very entity answers on its own — even when it says no. That
-//      is what makes "read everything except permission" expressible: a global row granting
-//      read, plus a row scoped to `permission` denying it.
-//   2. Otherwise the global permission (entity null) answers, if the user holds one.
+//   1. **The most specific grant decides.** A permission scoped to this very entity answers on
+//      its own — even when it says no. That is what makes "read everything except permission"
+//      expressible: a global row granting read, plus a row scoped to `permission` denying it.
+//      Only when the user holds no row for this entity does the global one (entity null) answer.
+//   2. **Deny wins**, among rows of the same specificity. A user can hold two permissions scoped
+//      to the same entity, and one saying no is enough. The alternative — first match wins —
+//      made the answer depend on the order relations came out of a SELECT with no ORDER BY, so
+//      "hold a denial? add a permissive row next to it" was a race against insertion order.
+//      Deny-wins is the only rule of the three considered that cannot be gamed by adding a row.
+//
+// Hence four passes, deliberately not fused: denials before grants, scoped before global. Each
+//  loop is one sentence of the rule above, and the priority is legible as sequence rather than
+//  as loop state.
 //
 // Everything else denies. A user with no permission at all, a verb outside the four, and an
 //  entity outside SYSTEM_ENTITIES are each their own branch. That last one matters: it turns a
@@ -135,16 +152,24 @@ _.can = (user_id, verb, entity) => {
 
     const permissions = _.getAllByUserId(user_id)
 
+    // Scoped to this entity: a single denial settles it.
     for (const permission of permissions) {
-        if (permission.entity === entity) return readVerb(permission, verb)
+        if (permission.entity === entity && !readVerb(permission, verb)) return false
+    }
+    // No scoped denial, so any scoped row that reaches here grants.
+    for (const permission of permissions) {
+        if (permission.entity === entity) return true
     }
 
+    // No scoped row at all: the global ones answer, under the same deny-wins rule.
     for (const permission of permissions) {
-        if (permission.entity === null) return readVerb(permission, verb)
+        if (permission.entity === null && !readVerb(permission, verb)) return false
+    }
+    for (const permission of permissions) {
+        if (permission.entity === null) return true
     }
 
     return false
 }
 
 module.exports = _
- 

@@ -1,4 +1,4 @@
-const db = require('../core/db').GetConnection()
+const db = require('../core/db').getSharedConnection()
 
 const _ = {}
 

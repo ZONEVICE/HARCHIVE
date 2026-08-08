@@ -183,9 +183,9 @@ describe('GET /api/relation/id/:id', () => {
     })
 
     it('returns 404 when the id does not exist', async () => {
-        const res = await axios.get(`${URL}/api/relation/id/nonexistent-id`, AS_ADMIN)
+        const res = await axios.get(`${URL}/api/relation/id/999999`, AS_ADMIN)
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('relation not found')
     })
 })
@@ -220,7 +220,7 @@ describe('GET /api/relation/entity_id/:id', () => {
     })
 
     it('returns 200 with empty array when no relation matches', async () => {
-        const res = await axios.get(`${URL}/api/relation/entity_id/0`, AS_ADMIN)
+        const res = await axios.get(`${URL}/api/relation/entity_id/999999`, AS_ADMIN)
         expect(res.status).toBe(200)
         expect(res.data.status).toBe('success')
         expect(Array.isArray(res.data.data)).toBe(true)
@@ -239,7 +239,7 @@ describe('PUT /api/relation/update/', () => {
     it('returns 404 when relation does not exist', async () => {
         const res = await axios.put(`${URL}/api/relation/update/`, { ...SAMPLE, id: 999999 }, AS_ADMIN)
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('relation not found')
     })
 
@@ -1995,6 +1995,131 @@ describe('user x permission — the link that grants rights', () => {
     afterAll(async () => {
         await relationDelete(relation_id)
         await relationDelete(distraction_id)
+    })
+})
+
+// --------------------------------------------------------------------------------
+// The two rules that decide how the links above are read. They are asserted through
+// permission_service directly, because both need states no single route reaches.
+// --------------------------------------------------------------------------------
+describe('user x permission — only a `linked` relation is a grant', () => {
+    const PERMISSION_NAME = `rel-relation-type-${RUN}`
+    const USER_ID = 900010
+    const SOME_ENTITY = 'tag'
+
+    let permission_id = ''
+    const relation_ids = []
+
+    // Every relation type except the one that means "this user holds this permission".
+    const NOT_A_GRANT = ['contains', 'sibling', 'tagged', 'implies']
+
+    beforeAll(async () => {
+        await permissionPost({ name: PERMISSION_NAME, entity: null, can_read: true, can_create: true, can_edit: true, can_delete: true })
+        const created = await permissionGetByName(PERMISSION_NAME)
+        permission_id = created.data.data.id
+    })
+
+    it.each(NOT_A_GRANT)('a `%s` relation between the user and the permission grants nothing', async (relation_type) => {
+        const note = `relation-test: ${relation_type} user <-> permission ${RUN}`
+        const res = await relationPost({
+            id_1: USER_ID,
+            entity_1: 'user',
+            id_2: permission_id,
+            entity_2: 'permission',
+            relation_type,
+            note
+        })
+        expect(res.status).toBe(201)
+        relation_ids.push(await findRelationIdByNote(note))
+
+        // The row is a perfectly valid relation, it simply is not a grant.
+        expect(permission_service.getAllByUserId(USER_ID)).toEqual([])
+        expect(permission_service.can(USER_ID, 'read', SOME_ENTITY)).toBe(false)
+        expect(permission_service.can(USER_ID, 'delete', SOME_ENTITY)).toBe(false)
+    })
+
+    it('the same pair related as `linked` does grant, with every other row still in place', async () => {
+        const note = `relation-test: linked user <-> permission ${RUN}`
+        const res = await relationPost({
+            id_1: USER_ID,
+            entity_1: 'user',
+            id_2: permission_id,
+            entity_2: 'permission',
+            relation_type: 'linked',
+            note
+        })
+        expect(res.status).toBe(201)
+        relation_ids.push(await findRelationIdByNote(note))
+
+        expect(permission_service.getAllByUserId(USER_ID).length).toBe(1)
+        expect(permission_service.can(USER_ID, 'read', SOME_ENTITY)).toBe(true)
+        expect(permission_service.can(USER_ID, 'delete', SOME_ENTITY)).toBe(true)
+    })
+
+    afterAll(async () => {
+        for (const id of relation_ids) await relationDelete(id)
+    })
+})
+
+describe('user x permission — deny wins between rows of the same scope', () => {
+    const GRANTING_NAME = `rel-deny-wins-yes-${RUN}`
+    const DENYING_NAME = `rel-deny-wins-no-${RUN}`
+    const USER_ID = 900011
+    const SCOPED_ENTITY = 'tag'
+    const OTHER_ENTITY = 'file'
+
+    let granting_id = ''
+    let denying_id = ''
+    const relation_ids = []
+
+    const link = async (permission_id, note) => {
+        const res = await relationPost({
+            id_1: USER_ID,
+            entity_1: 'user',
+            id_2: permission_id,
+            entity_2: 'permission',
+            relation_type: 'linked',
+            note
+        })
+        expect(res.status).toBe(201)
+        relation_ids.push(await findRelationIdByNote(note))
+    }
+
+    beforeAll(async () => {
+        await permissionPost({ name: GRANTING_NAME, entity: SCOPED_ENTITY, can_read: true, can_create: true, can_edit: true, can_delete: true })
+        await permissionPost({ name: DENYING_NAME, entity: SCOPED_ENTITY, can_read: false, can_create: false, can_edit: false, can_delete: false })
+        granting_id = (await permissionGetByName(GRANTING_NAME)).data.data.id
+        denying_id = (await permissionGetByName(DENYING_NAME)).data.data.id
+    })
+
+    it('one permission scoped to the entity answers on its own', async () => {
+        await link(granting_id, `relation-test: deny-wins granting ${RUN}`)
+        expect(permission_service.can(USER_ID, 'read', SCOPED_ENTITY)).toBe(true)
+    })
+
+    it('a second row scoped to the same entity that says no takes it away', async () => {
+        await link(denying_id, `relation-test: deny-wins denying ${RUN}`)
+        expect(permission_service.getAllByUserId(USER_ID).length).toBe(2)
+        expect(permission_service.can(USER_ID, 'read', SCOPED_ENTITY)).toBe(false)
+        expect(permission_service.can(USER_ID, 'delete', SCOPED_ENTITY)).toBe(false)
+    })
+
+    it('does not depend on which row was linked first', async () => {
+        // The old rule was "first match wins", and the first match was whatever order the
+        //  relations came out of a SELECT with no ORDER BY. Trashing the granting link and
+        //  re-creating it puts it last, which under that rule would have flipped the answer.
+        await relationDelete(relation_ids[0])
+        await link(granting_id, `relation-test: deny-wins granting again ${RUN}`)
+
+        expect(permission_service.can(USER_ID, 'read', SCOPED_ENTITY)).toBe(false)
+    })
+
+    it('says nothing about an entity neither row is scoped to', async () => {
+        expect(permission_service.can(USER_ID, 'read', OTHER_ENTITY)).toBe(false)
+    })
+
+    afterAll(async () => {
+        for (const id of relation_ids) await relationDelete(id)
     })
 })
 

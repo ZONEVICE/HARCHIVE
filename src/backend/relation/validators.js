@@ -8,6 +8,10 @@ _.isNumber = v => typeof v === 'number'
 _.isNullableString = v => v == null || typeof v === 'string'
 _.isBoolean = v => typeof v === 'boolean'
 _.isNumberOrNull = v => v === null || typeof v === 'number'
+// Ids arriving in the URL are strings (`req.params.id`). The controller passes them through
+//  Number() first, and this says whether the result is a usable id: the database assigns them as
+//  INTEGER PRIMARY KEY, so they are whole and start at 1.
+_.isId = v => Number.isInteger(v) && v > 0
 _.isValidEntity = v => SYSTEM_ENTITIES.includes(v)
 _.isValidRelationType = v => RELATION_TYPES.includes(v)
 

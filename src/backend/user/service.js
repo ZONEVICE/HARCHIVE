@@ -12,9 +12,11 @@ const _ = {}
 // The seeded admin account, or null when it is missing. The seeder entity reads it to know
 //  whether the account still has to be created, and again to grant it the administrator
 //  permission.
-_.getAdminUser = () => repository.LoadAdminUser()
+_.getAdminUser = () => repository.getAdminUser()
 
-_.create = (user) => repository.Post(user)
+_.getById = (id) => repository.getById(id)
+_.getByUsername = (username) => repository.getByUsername(username)
+_.create = (user) => repository.post(user)
 
 // Builds a User from a create request. The id is assigned by the database. No HTTP route
 //  creates a user yet — the caller today is the seeder entity, which creates the admin account
@@ -32,10 +34,23 @@ _.buildForCreate = (body) => {
 //  the same answer in both cases so nobody can probe which usernames are registered.
 //  On success it returns a signed session token carrying the user id.
 _.login = (username, password) => {
-    const user = repository.LoadUserByUsername(username)
+    const user = repository.getByUsername(username)
     if (user === null) return null
     if (user.password !== password) return null
     return createToken({ id: user.id })
+}
+
+// Usernames are UNIQUE and case-insensitive, the same rule tag and permission apply to their
+//  names. No route creates a user yet, so the only caller today is the seeder — but the guard
+//  belongs here, next to the column it protects, so a future POST /api/user/ branches on it and
+//  answers 409 instead of letting the UNIQUE constraint throw a 500.
+_.isUsernameTaken = (username) => repository.getByUsername(username) !== null
+
+// Same rule, but ignoring the account being updated so it can keep its own username.
+_.isUsernameTakenByAnother = (username, id) => {
+    const clash = repository.getByUsername(username)
+    if (!clash) return false
+    return clash.id !== id
 }
 
 // Changes the password of the user identified by the session id (taken from the JWT).
@@ -43,10 +58,10 @@ _.login = (username, password) => {
 //  leaving the stored one untouched. Passwords are plain text for now, so it is a direct
 //  comparison.
 _.changePassword = (id, old_password, new_password) => {
-    const user = repository.LoadUserById(id)
+    const user = repository.getById(id)
     if (user === null) return false
     if (user.password !== old_password) return false
-    repository.SetPassword(user.id, new_password)
+    repository.setPassword(user.id, new_password)
     return true
 }
 

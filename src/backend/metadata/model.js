@@ -5,8 +5,6 @@ class Metadata {
     #value = ''
     #deleted_at = null
 
-    constructor() {}
-
     setClass(id, name, value, deleted_at) {
         this.#id = id
         this.#name = name

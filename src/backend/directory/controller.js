@@ -15,8 +15,10 @@ _.getAll = async (req, res) => {
 
 _.getById = async (req, res) => {
     try {
-        const data = service.getById(req.params.id)
-        if (!data) return res.status(404).json({ status: 'failed', description: 'directory not found' })
+        const id = Number(req.params.id)
+        if (!validators.isId(id)) return res.status(400).json({ status: 'warning', description: 'directory invalid' })
+        const data = service.getById(id)
+        if (!data) return res.status(404).json({ status: 'warning', description: 'directory not found' })
         res.status(200).json({ status: 'success', description: 'directory retrieved', data })
     } catch (e) {
         console.error('Error:', e.message)
@@ -40,7 +42,7 @@ _.update = async (req, res) => {
     try {
         if (!validators.validateUpdate(req.body)) return res.status(400).json({ status: 'warning', description: 'directory invalid' })
         const current = service.getById(req.body.id)
-        if (!current) return res.status(404).json({ status: 'failed', description: 'directory not found' })
+        if (!current) return res.status(404).json({ status: 'warning', description: 'directory not found' })
         const directory = service.buildForUpdate(current, req.body)
         service.update(directory)
         res.status(200).json({ status: 'success', description: 'directory updated' })
@@ -52,7 +54,11 @@ _.update = async (req, res) => {
 
 _.deleteById = async (req, res) => {
     try {
-        service.softDelete(req.params.id)
+        const id = Number(req.params.id)
+        if (!validators.isId(id)) return res.status(400).json({ status: 'warning', description: 'directory invalid' })
+        const current = service.getById(id)
+        if (!current) return res.status(404).json({ status: 'warning', description: 'directory not found' })
+        service.softDelete(id)
         res.status(200).json({ status: 'success', description: 'directory deleted' })
     } catch (e) {
         console.error('Error:', e.message)

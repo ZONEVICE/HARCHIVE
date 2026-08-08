@@ -100,9 +100,9 @@ describe('GET /api/directory/id/:id', () => {
     })
 
     it('returns 404 when the id does not exist', async () => {
-        const res = await axios.get(`${URL}/api/directory/id/nonexistent`, AS_ADMIN)
+        const res = await axios.get(`${URL}/api/directory/id/999999`, AS_ADMIN)
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('directory not found')
     })
 })
@@ -118,7 +118,7 @@ describe('PUT /api/directory/update/', () => {
     it('returns 404 when the directory does not exist', async () => {
         const res = await axios.put(`${URL}/api/directory/update/`, { ...SAMPLE, id: 999999 }, AS_ADMIN)
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('directory not found')
     })
 

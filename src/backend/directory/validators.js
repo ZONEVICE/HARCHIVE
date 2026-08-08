@@ -4,6 +4,10 @@ _.isString = v => typeof v === 'string'
 _.isNumber = v => typeof v === 'number'
 _.isBoolean = v => typeof v === 'boolean'
 _.isNumberOrNull = v => v === null || typeof v === 'number'
+// Ids arriving in the URL are strings (`req.params.id`). The controller passes them through
+//  Number() first, and this says whether the result is a usable id: the database assigns them as
+//  INTEGER PRIMARY KEY, so they are whole and start at 1.
+_.isId = v => Number.isInteger(v) && v > 0
 // The three dates are optional: a directory can be stored before anything has scanned it.
 _.isOptionalNumber = v => v === undefined || v === null || typeof v === 'number'
 

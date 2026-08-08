@@ -88,9 +88,9 @@ describe('GET /api/metadata/id/:id', () => {
     })
 
     it('returns 404 when the id does not exist', async () => {
-        const res = await axios.get(`${URL}/api/metadata/id/nonexistent`, AS_ADMIN)
+        const res = await axios.get(`${URL}/api/metadata/id/999999`, AS_ADMIN)
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('metadata not found')
     })
 })
@@ -106,7 +106,7 @@ describe('GET /api/metadata/name/:name', () => {
     it('returns 404 when the name does not exist', async () => {
         const res = await axios.get(`${URL}/api/metadata/name/nonexistent_name`, AS_ADMIN)
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('metadata not found')
     })
 })

@@ -136,9 +136,9 @@ describe('GET /api/permission/id/:id', () => {
     })
 
     it('returns 404 when the id does not exist', async () => {
-        const res = await axios.get(`${URL}/api/permission/id/nonexistent`, AS_ADMIN)
+        const res = await axios.get(`${URL}/api/permission/id/999999`, AS_ADMIN)
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('permission not found')
     })
 })
@@ -160,7 +160,7 @@ describe('GET /api/permission/name/:name', () => {
     it('returns 404 when the name does not exist', async () => {
         const res = await axios.get(`${URL}/api/permission/name/not-a-real-permission-${RUN}`, AS_ADMIN)
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('permission not found')
     })
 })
@@ -206,7 +206,7 @@ describe('PUT /api/permission/update/', () => {
     it('returns 404 when the permission does not exist', async () => {
         const res = await axios.put(`${URL}/api/permission/update/`, { ...SAMPLE, id: 999999 }, AS_ADMIN)
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('permission not found')
     })
 

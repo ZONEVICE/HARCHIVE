@@ -1,12 +1,12 @@
-const db = require('../core/db').GetConnection()
+const db = require('../core/db').getSharedConnection()
 
 const _ = {}
 
 _.CREATE_TABLE = `
     CREATE TABLE IF NOT EXISTS relation (
-        id        INTEGER PRIMARY KEY,
-        id_1      INTEGER NOT NULL,
-        entity_1  TEXT NOT NULL,
+        id            INTEGER PRIMARY KEY,
+        id_1          INTEGER NOT NULL,
+        entity_1      TEXT NOT NULL,
         id_2          INTEGER NOT NULL,
         entity_2      TEXT NOT NULL,
         relation_type TEXT NOT NULL,
@@ -25,7 +25,13 @@ _.createTable = () => {
 
 _.getAll = () => db.prepare('SELECT * FROM relation').all()
 
-_.getById = (id) => db.prepare('SELECT * FROM relation WHERE id = ?').get(id)
+// A single-row read returns the row or null when there is no match, never undefined, so a
+//  caller testing with `!== null` reads the same here as in every other repository.
+_.getById = (id) => {
+    const row = db.prepare('SELECT * FROM relation WHERE id = ?').get(id)
+    if (!row) return null
+    return row
+}
 
 _.getByEntity = (entity) => db.prepare(
     'SELECT * FROM relation WHERE entity_1 = ? OR entity_2 = ?'

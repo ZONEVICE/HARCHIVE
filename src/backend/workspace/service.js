@@ -10,6 +10,12 @@ const _ = {}
 // --------------------------------------------------------------------------------
 _.getAll = () => repository.getAll()
 _.getById = (id) => repository.getById(id)
+// No route reads a workspace by path yet, and this stays exposed anyway: a service mirrors the
+//  lookups its repository has, so the surface is the same whoever asks. Today it returns the
+//  stored row; the file-manager work will grow the answer (whether the path still exists on
+//  disk, and the first level of directories and files both in the database and on the actual
+//  filesystem), and that lands here without the callers changing.
+_.getByPathAbsolute = (path_absolute) => repository.getByPathAbsolute(path_absolute)
 _.create = (workspace) => repository.post(workspace)
 _.update = (workspace) => repository.update(workspace)
 

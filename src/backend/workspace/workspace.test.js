@@ -119,9 +119,9 @@ describe('GET /api/workspace/id/:id', () => {
     })
 
     it('returns 404 when the id does not exist', async () => {
-        const res = await workspaceGetById('nonexistent')
+        const res = await workspaceGetById(999999)
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('workspace not found')
     })
 })
@@ -137,7 +137,7 @@ describe('PUT /api/workspace/update/', () => {
     it('returns 404 when the workspace does not exist', async () => {
         const res = await workspaceUpdate({ ...SAMPLE, id: 999999 })
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('workspace not found')
     })
 

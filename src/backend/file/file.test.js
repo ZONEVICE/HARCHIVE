@@ -78,9 +78,9 @@ describe('GET /api/file/id/:id', () => {
     })
 
     it('returns 404 when the id does not exist', async () => {
-        const res = await axios.get(`${URL}/api/file/id/nonexistent`, AS_ADMIN)
+        const res = await axios.get(`${URL}/api/file/id/999999`, AS_ADMIN)
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('file not found')
     })
 })

@@ -1,74 +1,42 @@
+const db = require('../core/db').getSharedConnection();
+
 const _ = {};
 
-const db = require('../core/db');
 const Model = require('./model');
 const { ADMIN_USERNAME } = require('../core/constants');
 
-_.CreateTable = () => {
-    const query = `CREATE TABLE IF NOT EXISTS user (
-        id INTEGER PRIMARY KEY,
-        username TEXT NOT NULL,
+// username is UNIQUE and case-insensitive: two accounts differing only in case would be two
+//  logins a human reads as the same one, and login resolves an account by this column.
+_.CREATE_TABLE = `
+    CREATE TABLE IF NOT EXISTS user (
+        id       INTEGER PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE COLLATE NOCASE,
         password TEXT NOT NULL
-    )`;
-    const _db = db.GetConnection();
-    _db.exec(query);
-    _db.close();
-}
+    )
+`;
 
-_.DropTable = () => {
-    const query = `DROP TABLE IF EXISTS user`;
-    const _db = db.GetConnection();
-    _db.exec(query);
-    _db.close();
-}
+_.createTable = () => db.prepare(_.CREATE_TABLE).run();
 
-_.Post = (user) => {
-    const query = `INSERT INTO user (username, password) VALUES (?, ?)`;
-    const _db = db.GetConnection();
-    _db.prepare(query).run(user.username, user.password);
-    _db.close();
-}
+_.dropTable = () => db.prepare('DROP TABLE IF EXISTS user').run();
 
-_.LoadUserByUsername = username => {
-    const query = `SELECT * FROM user WHERE username = ?`;
-    const _db = db.GetConnection();
-    let res = _db.prepare(query).all(username);
-    _db.close();
-    if (res.length === 0) {
-        return null;
-    }
-    let row = res[0];
-    let user = new Model();
-    user.id = row.id;
-    user.username = row.username;
-    user.password = row.password;
+// A single-row read returns the model or null when there is no match, never undefined.
+const readRow = (row) => {
+    if (!row) return null;
+
+    const user = new Model();
+    user.setClass(row.id, row.username, row.password);
     return user;
 }
+
+_.post = (user) => db.prepare('INSERT INTO user (username, password) VALUES (?, ?)').run(user.username, user.password);
+
+_.getByUsername = username => readRow(db.prepare('SELECT * FROM user WHERE username = ?').get(username));
+
+_.getById = id => readRow(db.prepare('SELECT * FROM user WHERE id = ?').get(id));
 
 // The admin user is just the user holding the name from constants.js.
-_.LoadAdminUser = () => _.LoadUserByUsername(ADMIN_USERNAME);
+_.getAdminUser = () => _.getByUsername(ADMIN_USERNAME);
 
-_.LoadUserById = id => {
-    const query = `SELECT * FROM user WHERE id = ?`;
-    const _db = db.GetConnection();
-    let res = _db.prepare(query).all(id);
-    _db.close();
-    if (res.length === 0) {
-        return null;
-    }
-    let row = res[0];
-    let user = new Model();
-    user.id = row.id;
-    user.username = row.username;
-    user.password = row.password;
-    return user;
-}
-
-_.SetPassword = (id, new_password) => {
-    const query = `UPDATE user SET password = ? WHERE id = ?`;
-    const _db = db.GetConnection();
-    _db.prepare(query).run(new_password, id);
-    _db.close();
-}
+_.setPassword = (id, new_password) => db.prepare('UPDATE user SET password = ? WHERE id = ?').run(new_password, id);
 
 module.exports = _;

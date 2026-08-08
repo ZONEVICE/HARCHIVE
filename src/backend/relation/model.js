@@ -9,8 +9,6 @@ class Relation {
     #note = null
     #deleted_at = null
 
-    constructor() {}
-
     setClass(id, id_1, entity_1, id_2, entity_2, relation_type, note, deleted_at) {
         this.#id = id
         this.#id_1 = id_1

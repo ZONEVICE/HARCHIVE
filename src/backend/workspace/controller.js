@@ -15,8 +15,10 @@ _.getAll = async (req, res) => {
 
 _.getById = async (req, res) => {
     try {
-        const data = service.getById(req.params.id)
-        if (!data) return res.status(404).json({ status: 'failed', description: 'workspace not found' })
+        const id = Number(req.params.id)
+        if (!validators.isId(id)) return res.status(400).json({ status: 'warning', description: 'workspace invalid' })
+        const data = service.getById(id)
+        if (!data) return res.status(404).json({ status: 'warning', description: 'workspace not found' })
         res.status(200).json({ status: 'success', description: 'workspace retrieved', data })
     } catch (e) {
         console.error('Error:', e.message)
@@ -43,7 +45,7 @@ _.update = async (req, res) => {
     try {
         if (!validators.validateUpdate(req.body)) return res.status(400).json({ status: 'warning', description: 'workspace invalid' })
         const current = service.getById(req.body.id)
-        if (!current) return res.status(404).json({ status: 'failed', description: 'workspace not found' })
+        if (!current) return res.status(404).json({ status: 'warning', description: 'workspace not found' })
         const workspace = service.buildForUpdate(current, req.body)
         if (service.isPathTakenByAnother(workspace.path_absolute, workspace.id)) {
             return res.status(409).json({ status: 'warning', description: 'workspace already exists' })
@@ -58,7 +60,11 @@ _.update = async (req, res) => {
 
 _.deleteById = async (req, res) => {
     try {
-        service.softDelete(req.params.id)
+        const id = Number(req.params.id)
+        if (!validators.isId(id)) return res.status(400).json({ status: 'warning', description: 'workspace invalid' })
+        const current = service.getById(id)
+        if (!current) return res.status(404).json({ status: 'warning', description: 'workspace not found' })
+        service.softDelete(id)
         res.status(200).json({ status: 'success', description: 'workspace deleted' })
     } catch (e) {
         console.error('Error:', e.message)

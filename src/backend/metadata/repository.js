@@ -1,8 +1,4 @@
-const Database = require('better-sqlite3')
-const path = require('path')
-const fs = require('fs')
-
-const db = require('../core/db').GetConnection()
+const db = require('../core/db').getSharedConnection()
 
 const _ = {}
 

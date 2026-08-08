@@ -6,6 +6,7 @@ const _db = require('../core/db');
 const axios = require('axios');
 
 const user_repository = require('./repository');
+const user_service = require('./service');
 const user_model = require('./model');
 
 // The admin account is seed data, so creating it belongs to the seeder entity, not to this one.
@@ -13,75 +14,95 @@ const seeder_service = require('../seeder/service');
 
 describe('User Tests', () => {
     it('DROP and CREATE table for testing', async () => {
-        await user_repository.DropTable();
-        await user_repository.CreateTable();
+        await user_repository.dropTable();
+        await user_repository.createTable();
     });
     describe('CREATE TABLE', () => {
         it('Should create user table', () => {
-            user_repository.CreateTable();
-            const __db = _db.GetConnection();
-            const res = __db.prepare('SELECT * FROM user').all();
-            __db.close();
+            user_repository.createTable();
+            const res = _db.getSharedConnection().prepare('SELECT * FROM user').all();
             expect(Array.isArray(res)).toBe(true);
         });
     });
     describe('Create Admin User', () => {
         it('Should create an admin user', () => {
-            user_repository.CreateTable();
+            user_repository.createTable();
             seeder_service.createAdminUser();
-            const user = user_repository.LoadAdminUser();
+            const user = user_repository.getAdminUser();
             expect(user).not.toBeNull();
             expect(typeof user.id).toBe('number');
             expect(user.username).toBe(ADMIN_USERNAME);
             expect(user.password).toBe('changeme');
         });
         it('Not duplicated', () => {
-            user_repository.CreateTable();
+            user_repository.createTable();
             seeder_service.createAdminUser();
             seeder_service.createAdminUser();
-            const dbConn = _db.GetConnection();
-            const res = dbConn.prepare(`SELECT * FROM user WHERE username = ?`).all(ADMIN_USERNAME);
-            dbConn.close();
+            const res = _db.getSharedConnection().prepare(`SELECT * FROM user WHERE username = ?`).all(ADMIN_USERNAME);
             expect(res.length).toBe(1);
         });
     });
-    describe('LoadUserByUsername', () => {
-        it('Should load user by username', () => {
-            user_repository.CreateTable();
+    describe('Unique username', () => {
+        it('Is taken, case-insensitively', () => {
+            user_repository.createTable();
             seeder_service.createAdminUser();
-            const user = user_repository.LoadUserByUsername(ADMIN_USERNAME);
+            expect(user_service.isUsernameTaken(ADMIN_USERNAME)).toBe(true);
+            expect(user_service.isUsernameTaken(ADMIN_USERNAME.toLowerCase())).toBe(true);
+            expect(user_service.isUsernameTaken('nobody-holds-this-name')).toBe(false);
+        });
+        it('Is not taken by the account holding it', () => {
+            user_repository.createTable();
+            seeder_service.createAdminUser();
+            const admin = user_repository.getAdminUser();
+            expect(user_service.isUsernameTakenByAnother(ADMIN_USERNAME, admin.id)).toBe(false);
+            expect(user_service.isUsernameTakenByAnother(ADMIN_USERNAME, admin.id + 1)).toBe(true);
+        });
+        it('The column refuses a second account differing only in case', () => {
+            // The schema is the guard, not the service: username is UNIQUE COLLATE NOCASE, so
+            //  the insert throws instead of quietly creating a second admin.
+            user_repository.createTable();
+            seeder_service.createAdminUser();
+            const duplicate = user_service.buildForCreate({ username: ADMIN_USERNAME.toLowerCase(), password: 'x' });
+            expect(() => user_service.create(duplicate)).toThrow();
+        });
+    });
+    describe('getByUsername', () => {
+        it('Should load user by username', () => {
+            user_repository.createTable();
+            seeder_service.createAdminUser();
+            const user = user_repository.getByUsername(ADMIN_USERNAME);
             expect(user).not.toBeNull();
             expect(user.username).toBe(ADMIN_USERNAME);
         });
         it('Not found', () => {
-            user_repository.CreateTable();
-            const user = user_repository.LoadUserByUsername('NOBODY');
+            user_repository.createTable();
+            const user = user_repository.getByUsername('NOBODY');
             expect(user).toBeNull();
         });
     });
-    describe('LoadUserById', () => {
+    describe('getById', () => {
         it('Should load user by id', () => {
-            user_repository.CreateTable();
+            user_repository.createTable();
             seeder_service.createAdminUser();
-            const admin = user_repository.LoadAdminUser();
-            const user = user_repository.LoadUserById(admin.id);
+            const admin = user_repository.getAdminUser();
+            const user = user_repository.getById(admin.id);
             expect(user).not.toBeNull();
             expect(user.id).toBe(admin.id);
             expect(user.username).toBe(ADMIN_USERNAME);
         });
         it('Not found', () => {
-            user_repository.CreateTable();
-            const user = user_repository.LoadUserById('999');
+            user_repository.createTable();
+            const user = user_repository.getById('999');
             expect(user).toBeNull();
         });
     });
-    describe('SetPassword', () => {
+    describe('setPassword', () => {
         it('Should set user password correctly', () => {
-            user_repository.CreateTable();
+            user_repository.createTable();
             seeder_service.createAdminUser();
-            const admin = user_repository.LoadAdminUser();
-            user_repository.SetPassword(admin.id, 'newpassword');
-            const user = user_repository.LoadUserById(admin.id);
+            const admin = user_repository.getAdminUser();
+            user_repository.setPassword(admin.id, 'newpassword');
+            const user = user_repository.getById(admin.id);
             expect(user.password).toBe('newpassword');
         });
     });

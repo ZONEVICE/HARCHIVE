@@ -165,17 +165,17 @@ describe('GET /api/tag/id/:id', () => {
         expect(res.data.data.deleted_at).toBeNull()
     })
 
-    it('returns 404 when the id does not exist', async () => {
+    it('returns 400 when the id is not a number', async () => {
         const res = await tagGetById('nonexistent')
-        expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
-        expect(res.data.description).toBe('tag not found')
+        expect(res.status).toBe(400)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('tag invalid')
     })
 
     it('returns 404 on a numeric id that no tag holds', async () => {
         const res = await tagGetById(999999)
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('tag not found')
     })
 })
@@ -197,7 +197,7 @@ describe('GET /api/tag/name/:name', () => {
     it('returns 404 when the name does not exist', async () => {
         const res = await tagGetByName('nonexistent_name')
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('tag not found')
     })
 })
@@ -236,7 +236,7 @@ describe('PUT /api/tag/update/', () => {
     it('returns 404 when the tag does not exist', async () => {
         const res = await tagUpdate({ id: 999999, name: 'ghost', metadata: '{}' })
         expect(res.status).toBe(404)
-        expect(res.data.status).toBe('failed')
+        expect(res.data.status).toBe('warning')
         expect(res.data.description).toBe('tag not found')
     })
 
@@ -345,17 +345,18 @@ describe('DELETE /api/tag/id/:id (soft-delete)', () => {
         expect(restored.data.data.deleted_at).toBeNull()
     })
 
-    it('answers 200 when the id does not exist (the update simply matches no row)', async () => {
+    it('answers 404 when the id does not exist', async () => {
         const res = await tagDelete(999999)
-        expect(res.status).toBe(200)
-        expect(res.data.status).toBe('success')
-        expect(res.data.description).toBe('tag deleted')
+        expect(res.status).toBe(404)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('tag not found')
     })
 
-    it('answers 200 when the id is not a number', async () => {
+    it('answers 400 when the id is not a number', async () => {
         const res = await tagDelete('not-an-id')
-        expect(res.status).toBe(200)
-        expect(res.data.status).toBe('success')
+        expect(res.status).toBe(400)
+        expect(res.data.status).toBe('warning')
+        expect(res.data.description).toBe('tag invalid')
     })
 })
 
