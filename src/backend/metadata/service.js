@@ -60,4 +60,10 @@ _.softDeleteByName = (name) => repository.softDeleteByName(name, getSystemTime()
 //  it exists for backend code that genuinely needs to purge a record.
 _.hardDeleteByName = (name) => repository.deleteByName(name)
 
+// Clears the trash mark without touching the value. It is not reachable from any HTTP endpoint
+//  — a client restores a record by sending deleted_at: false to the update route. It exists for
+//  the seeder entity, which restores a seeded record sitting in the trash instead of re-creating
+//  it, because its UNIQUE name is still taken. Keyed by name, like this entity's two deletes.
+_.restoreFromTrashCanByName = (name) => repository.restoreFromTrashCanByName(name)
+
 module.exports = _

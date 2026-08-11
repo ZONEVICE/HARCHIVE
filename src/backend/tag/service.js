@@ -55,4 +55,14 @@ _.isNameTakenByAnother = (name, id) => {
 //  search history keep pointing to a valid tag.
 _.softDelete = (id) => repository.softDelete(id, getSystemTime())
 
+// Hard-delete: physically removes the row. Deliberately not wired to any HTTP endpoint —
+//  it exists for backend code that genuinely needs to purge a tag.
+_.hardDelete = (id) => repository.deleteById(id)
+
+// Clears the trash mark without touching the name or the metadata blob. It is not reachable
+//  from any HTTP endpoint — a client restores a tag by sending deleted_at: false to the update
+//  route. It exists for the seeder entity, which restores a seeded tag sitting in the trash
+//  instead of re-creating it, because its UNIQUE name is still taken.
+_.restoreFromTrashCan = (id) => repository.restoreFromTrashCan(id)
+
 module.exports = _

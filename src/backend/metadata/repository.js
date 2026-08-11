@@ -33,6 +33,12 @@ _.post = (metadata) => db.prepare('INSERT INTO metadata (name, value, deleted_at
 
 _.softDeleteByName = (name, deleted_at) => db.prepare('UPDATE metadata SET deleted_at = ? WHERE name = ?').run(deleted_at, name)
 
+// Clears the trash mark without touching the value. The seeder needs it: a seeded record
+//  sitting in the trash is restored, never re-created, because its UNIQUE name is still taken.
+//  Keyed by name like the two deletes above, so the whole delete/restore family of this entity
+//  reads the same way.
+_.restoreFromTrashCanByName = (name) => db.prepare('UPDATE metadata SET deleted_at = NULL WHERE name = ?').run(name)
+
 // Physical deletes. They are not reachable from any HTTP endpoint: only backend code
 //  calling service.hardDeleteByName gets to them.
 _.deleteByName = (name) => db.prepare('DELETE FROM metadata WHERE name = ?').run(name)

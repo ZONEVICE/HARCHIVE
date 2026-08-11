@@ -34,6 +34,15 @@ _.update = (tag) => db.prepare('UPDATE tag SET name = ?, metadata = ?, deleted_a
 
 _.softDelete = (id, deleted_at) => db.prepare('UPDATE tag SET deleted_at = ? WHERE id = ?').run(deleted_at, id)
 
+// Clears the trash mark without touching the rest of the row. The seeder needs it: a seeded
+//  tag sitting in the trash is restored, never re-created, because its UNIQUE name is still
+//  taken.
+_.restoreFromTrashCan = (id) => db.prepare('UPDATE tag SET deleted_at = NULL WHERE id = ?').run(id)
+
+// Physical deletes. They are not reachable from any HTTP endpoint: only backend code
+//  calling service.hardDelete gets to them.
+_.deleteById = (id) => db.prepare('DELETE FROM tag WHERE id = ?').run(id)
+
 _.deleteAll = () => db.prepare('DELETE FROM tag').run()
 
 module.exports = _

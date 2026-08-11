@@ -5,6 +5,8 @@
 const user_service = require('../user/service')
 const permission_service = require('../permission/service')
 const relation_service = require('../relation/service')
+const metadata_service = require('../metadata/service')
+const tag_service = require('../tag/service')
 
 const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../core/constants')
 const { ADMINISTRATOR_PERMISSION_NAME, GUEST_PERMISSION_NAME } = require('../permission/util')
@@ -108,6 +110,69 @@ _.linkAdminUser = () => {
         note: 'admin user granted the administrator permission'
     })
     relation_service.create(relation)
+}
+
+// --------------------------------------------------------------------------------
+// Seedable metadata and tags.
+//
+// Nothing below is called by seed(): the application boots today without a single seeded
+//  metadata record or tag, and adding one is a decision the owner makes. They live here,
+//  written and tested ahead of that decision, so seeding one later is a single line inside
+//  seed() and never a new helper written in a hurry.
+//
+// Both entities own a UNIQUE name, so both walk into the trap the soft delete sets — the same
+//  one ensureDefaultPermission above is built around. Read that comment first: the shape here
+//  is deliberately identical.
+// --------------------------------------------------------------------------------
+
+// Writes one metadata record, unconditionally. It is the raw create — no guard, no lookup — so
+//  calling it for a name that already exists (trash can included) throws on the UNIQUE column.
+//  Use ensureMetadataByName below for anything that runs at boot.
+_.createMetadata = (name, value) => {
+    const metadata = metadata_service.buildForCreate({ name, value })
+    metadata_service.create(metadata)
+}
+
+// Creates the record when it is missing, restores it when it sits in the trash can, and does
+//  nothing at all when a live row already holds the name.
+//
+// **The name is the only thing it looks at.** A live record keeps the value it has, even when
+//  the value passed here is a different one: `value` is what the record was *created* with, not
+//  what it must always say, so a value the owner edited through the API survives every restart.
+//  Seeding is "make sure this record exists", never "put this record back the way I wrote it" —
+//  the same rule ensureDefaultPermission follows with the four flags. Overwriting a stored value
+//  needs a deliberate update, not a boot.
+_.ensureMetadataByName = (name, value) => {
+    const current = metadata_service.getByName(name)
+
+    if (current !== null && current.deleted_at === null) return
+    if (current !== null) return metadata_service.restoreFromTrashCanByName(name)
+
+    _.createMetadata(name, value)
+}
+
+// Writes one tag, unconditionally. Same warning as createMetadata: no guard, so a name already
+//  taken — by a live tag or by one in the trash can — throws on the UNIQUE column. The metadata
+//  argument is the tag's own JSON blob (unrelated to the metadata entity) and may be omitted,
+//  which keeps the model default of '{}'.
+_.createTag = (name, metadata) => {
+    const tag = tag_service.buildForCreate({ name, metadata })
+    tag_service.create(tag)
+}
+
+// The tag counterpart of ensureMetadataByName, rule for rule: the name decides, a live tag is
+//  left exactly as it is, and a trashed one is restored rather than re-created.
+//
+// One difference, and it comes from the schema: tag.name is UNIQUE COLLATE NOCASE, so the lookup
+//  ignores case and `Portrait` finds the tag stored as `portrait`. metadata.name has no
+//  collation, so there the two are different records.
+_.ensureTagByName = (name, metadata) => {
+    const current = tag_service.getByName(name)
+
+    if (current !== null && current.deleted_at === null) return
+    if (current !== null) return tag_service.restoreFromTrashCan(current.id)
+
+    _.createTag(name, metadata)
 }
 
 module.exports = _
