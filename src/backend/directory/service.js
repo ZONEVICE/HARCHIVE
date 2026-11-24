@@ -1,52 +1,121 @@
+// =====================================================================================
+// IMPORTS.
+// =====================================================================================
+
+// The class a write is built with.
 const Directory = require('./model')
+
+// The only door to the directory table.
 const repository = require('./repository')
+
+// The shared clock, in epoch seconds.
 const { getSystemTime } = require('../core/time')
 
+// Everything this file publishes.
 const _ = {}
 
-// --------------------------------------------------------------------------------
-// Data access. This service is the only door to repository.js: a controller never
-//  reaches the repository itself, it always comes through here.
-// --------------------------------------------------------------------------------
+// =====================================================================================
+// DATA ACCESS.
+//
+//  This service is the only door to repository.js: a controller never reaches the repository
+//  itself. Every primitive there is exposed here, used or not, and answers plain rows exactly
+//  as the repository gave them.
+// =====================================================================================
+
+// Every live directory.
 _.getAll = () => repository.getAll()
+
+// One live directory by id, or null.
 _.getById = (id) => repository.getById(id)
+
+// Stores a new directory and hands back the stored row, id included.
 _.create = (directory) => repository.post(directory)
+
+// Overwrites a live directory and hands back the stored row, or null when there is none.
 _.update = (directory) => repository.update(directory)
 
-// Resolves the deleted_at value to store on update. The client sends a boolean, never a
-//  timestamp: true stamps the current system time, false clears the mark, and null (or an
-//  absent field) does nothing — it keeps whatever the stored row already had.
-_.resolveDeletedAt = (current, deleted_at_flag) => {
-    if (deleted_at_flag === undefined || deleted_at_flag === null) return current ? current.deleted_at : null
-    return deleted_at_flag ? getSystemTime() : null
+// =====================================================================================
+// DELETED RECORDS.
+//
+//  softDelete is what the DELETE route calls. The rest serve backend code only —
+//  maintenance and the suites — and no route reaches them.
+// =====================================================================================
+
+/**
+ * Deletes a live directory, stamping the current time.
+ * @param {Number} id Id of the directory to delete.
+ * @returns {Number|null} The id of the deleted directory, or null when no live one has that id.
+ *  A deleted record never travels to the client, so its id is all that comes back.
+ */
+_.softDelete = (id) => {
+    // The repository matches live rows only, so a second delete finds nothing to stamp.
+    const deleted = repository.softDelete(id, getSystemTime())
+    if (deleted === null) return null
+
+    return deleted.id
 }
 
-// Builds a Directory from a create request. The id is assigned by the database and deleted_at
-//  defaults to null; a date the client omits is stored as null.
+// Every deleted directory.
+_.getDeletedAll = () => repository.getDeletedAll()
+
+// One deleted directory by id, or null.
+_.getDeletedById = (id) => repository.getDeletedById(id)
+
+// Brings a deleted directory back exactly as it was. Hands back the row, or null when no deleted
+//  directory has that id.
+_.restoreSoftDelete = (id) => repository.restoreSoftDelete(id)
+
+// Removes a directory for good, live or deleted.
+_.hardDelete = (id) => repository.deleteById(id)
+
+// =====================================================================================
+// MODEL CONSTRUCTION.
+// =====================================================================================
+
+/**
+ * Builds a Directory out of a create request body.
+ * @param {String} body.name The directory name.
+ * @param {Number} body.date_scan Optional. Last scan, in epoch seconds, or null.
+ * @param {Number} body.date_creation Optional. Creation on disk, in epoch seconds, or null.
+ * @param {Number} body.date_last_modification Optional. Last change, in epoch seconds, or null.
+ * @returns {Object} The model to hand to create(). Its id is left to the database.
+ */
 _.buildForCreate = (body) => {
+    // The name is required. Nothing is normalised: this entity has no identity key.
     const directory = new Directory()
     directory.name = body.name
+
+    // The three dates are optional, and a date the client omits is stored as NULL.
     directory.date_scan = body.date_scan ?? null
     directory.date_creation = body.date_creation ?? null
     directory.date_last_modification = body.date_last_modification ?? null
+
     return directory
 }
 
-// Builds a Directory from an update request. It resolves deleted_at itself from the stored row
-//  and the client flag, so the controller does not deal with timestamps.
-_.buildForUpdate = (current, body) => {
-    const deleted_at = _.resolveDeletedAt(current, body.deleted_at)
+/**
+ * Builds a Directory out of an update request body. The whole record is replaced.
+ * @param {Number} body.id Id of the directory being written.
+ * @param {String} body.name The directory name.
+ * @param {Number} body.date_scan Optional. Last scan, in epoch seconds, or null.
+ * @param {Number} body.date_creation Optional. Creation on disk, in epoch seconds, or null.
+ * @param {Number} body.date_last_modification Optional. Last change, in epoch seconds, or null.
+ * @returns {Object} The model to hand to update().
+ */
+_.buildForUpdate = (body) => {
+    // deleted_at stays null: an update never writes it. An omitted date is stored as NULL,
+    //  because an update replaces the whole record.
     const directory = new Directory()
-    directory.setClass(body.id, body.name, body.date_scan, body.date_creation, body.date_last_modification, deleted_at)
+    directory.setClass(
+        body.id,
+        body.name,
+        body.date_scan ?? null,
+        body.date_creation ?? null,
+        body.date_last_modification ?? null,
+        null
+    )
+
     return directory
 }
-
-// Soft-delete: stamp deleted_at instead of removing the row, so the record stays readable and
-//  the relations pointing at this directory keep resolving it.
-_.softDelete = (id) => repository.softDelete(id, getSystemTime())
-
-// Hard-delete: physically removes the row. Deliberately not wired to any HTTP endpoint —
-//  it exists for backend code that genuinely needs to purge a record.
-_.hardDelete = (id) => repository.deleteById(id)
 
 module.exports = _

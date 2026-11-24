@@ -1,10 +1,20 @@
+// =====================================================================================
+// STATE.
+// =====================================================================================
+
+// Everything this file publishes.
 const _ = {}
 
-// Health check. The parameter is named `req` even though it goes unused: calling it `_` shadowed
-//  the module object this file is built on, which would have silently broken the first line of
-//  code here that reached for it.
+// =====================================================================================
+// ROUTE CONTROLLERS.
+// =====================================================================================
+
+// Health check: answers that the process is up and serving. The first parameter is named
+//  `req` although it goes unused — calling it `_` would shadow the module object this file
+//  is built on.
 _.ping = async (req, res) => {
     try {
+        // Reaching this line is the whole answer: the process is up and routing requests.
         return res.status(200).json({ status: 'success', description: 'pong' })
     } catch (error) {
         console.error('Error:', error.message)

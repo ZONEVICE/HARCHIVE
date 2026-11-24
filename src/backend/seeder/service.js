@@ -1,106 +1,134 @@
-// The seeder is an intern entity: it owns no table, no model and no HTTP surface. What it owns
-//  is one operation — put into the database the records the application cannot run without —
-//  and that operation spans user, permission and relation. It reaches every one of them through
-//  its service, the public surface, and never through a repository or a model.
+// =====================================================================================
+// IMPORTS.
+//
+//  The seeder is an intern entity: no controller, no routes, no validators, no table, no
+//  model of its own. It writes only through the services of the entities it seeds, never
+//  through a repository or a model of theirs; where it needs a model, it asks the owning
+//  entity to build one. A util.js is the other thing it may read, for their vocabulary.
+// =====================================================================================
+
+// The entities the seeder writes through.
 const user_service = require('../user/service')
 const permission_service = require('../permission/service')
 const relation_service = require('../relation/service')
 const metadata_service = require('../metadata/service')
 const tag_service = require('../tag/service')
 
-const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../core/constants')
+// The seeded account's name and first password.
+const { ADMIN_USERNAME, ADMIN_DEFAULT_PASSWORD } = require('../user/util')
+
+// The names of the two default roles.
 const { ADMINISTRATOR_PERMISSION_NAME, GUEST_PERMISSION_NAME } = require('../permission/util')
 
+// Everything this file publishes.
 const _ = {}
 
-// Everything the application needs in the database to boot, in the only order that works: the
-//  admin user and the default permissions first, the link between them last. Called from
-//  index.js once every table exists. Idempotent — it runs on every boot and never overwrites a
-//  record that is already there.
+// =====================================================================================
+// THE SEED.
+// =====================================================================================
+
+/**
+ * Everything the application needs in the database to boot, in the only order that works:
+ *  the admin account and the default permissions first, the link between them last.
+ *
+ * Called once from index.js, after every table exists, on every boot, so every step is
+ *  idempotent: a record already there is never written again, so a password the owner
+ *  changed, edited administrator flags and an admin account deliberately moved to another
+ *  permission all survive a restart.
+ */
 _.seed = () => {
     _.createAdminUser()
     _.createDefaultPermissions()
     _.linkAdminUser()
 }
 
-// --------------------------------------------------------------------------------
-// The admin user.
-// --------------------------------------------------------------------------------
+// =====================================================================================
+// THE ADMIN ACCOUNT.
+// =====================================================================================
 
-// The project ships with a single admin account, created when it is missing. Calling it again
-//  on an existing database does nothing, so a password the owner changed survives a restart.
-//  It does not fail loudly on its own: linkAdminUser below cannot find the account either and
-//  stops the boot there, in one place.
+// Creates the single account the project ships with, when it is missing. Calling it again on
+//  an existing database does nothing. It does not fail loudly on its own: linkAdminUser below
+//  cannot find the account either and stops the boot there, in one place.
 _.createAdminUser = () => {
+    // Already there: left exactly as it is, password included. user has no deleted family,
+    //  so this one lookup is the whole guard.
     if (user_service.getAdminUser() !== null) return
 
+    // Missing: the model is built by the entity that owns it, from its own vocabulary.
     const user = user_service.buildForCreate({ username: ADMIN_USERNAME, password: ADMIN_DEFAULT_PASSWORD })
     user_service.create(user)
 }
 
-// --------------------------------------------------------------------------------
-// The default permissions.
-// --------------------------------------------------------------------------------
+// =====================================================================================
+// THE DEFAULT PERMISSIONS.
+// =====================================================================================
 
-// Creates one default permission when it is missing, and does nothing when a live row already
-//  holds the name — an existing permission is never overwritten, so a deliberate change to its
-//  flags survives a restart.
-//
-// The naive "create it if getByName finds nothing" check would be wrong here: a soft-deleted
-//  row still holds its UNIQUE name and is still returned by reads, so a permission sitting in
-//  the trash would pass the check silently and leave the system without an administrator, and
-//  re-creating the name would hit the UNIQUE constraint and throw. A trashed default row is
-//  restored instead, keeping the flags it had.
+/**
+ * Makes sure one default permission exists, and leaves it alone when it does.
+ *
+ * "Create it when the lookup finds nothing" is the trap: the ordinary lookup does not see a
+ *  deleted permission, whose UNIQUE name would then make the create throw on every boot. So
+ *  both families are asked, and the name is the only thing that decides.
+ * @param {String} name The role name.
+ * @param {String} entity The entity it is scoped to, or null for every entity.
+ * @param {Boolean} can_read Whether the role may read.
+ * @param {Boolean} can_create Whether the role may create.
+ * @param {Boolean} can_edit Whether the role may edit.
+ * @param {Boolean} can_delete Whether the role may delete.
+ */
 _.ensureDefaultPermission = (name, entity, can_read, can_create, can_edit, can_delete) => {
-    const current = permission_service.getByName(name)
+    // Live: never touched, so a deliberate change to its flags survives the restart.
+    if (permission_service.getByName(name) !== null) return
 
-    if (current !== null && current.deleted_at === null) return
-    if (current !== null) return permission_service.restoreFromTrashCan(current.id)
+    // Deleted: restored in place, with the flags it had.
+    const deleted = permission_service.getDeletedByName(name)
+    if (deleted !== null) return permission_service.restoreSoftDelete(deleted.id)
 
+    // Missing: created, the model built by the entity that owns it.
     const permission = permission_service.buildForCreate({ name, entity, can_read, can_create, can_edit, can_delete })
     permission_service.create(permission)
 }
 
-// The two roles the application ships with. Both are global (`entity: null`), which is what the
-//  application needs to boot: an administrator that reaches every entity, and a guest that can
-//  read every entity. Narrowing a role to one entity is what the scope column is for, but that
-//  is a decision the owner makes, not a default the seeder imposes.
-//  Idempotent: it runs on every boot.
+// The two roles the application ships with, both global (entity: null): an administrator that
+//  reaches every entity, and a guest that can read every one of them. Narrowing a role to one
+//  entity is what the scope column is for, but that is the owner's decision, not a default
+//  the seeder imposes.
 _.createDefaultPermissions = () => {
+    // Both ensures are idempotent.
     _.ensureDefaultPermission(ADMINISTRATOR_PERMISSION_NAME, null, true, true, true, true)
     _.ensureDefaultPermission(GUEST_PERMISSION_NAME, null, true, false, false, false)
 
     // Fail loudly: a backend without a live administrator permission is half-initialised and
     //  must not come up at all.
-    const administrator = permission_service.getByName(ADMINISTRATOR_PERMISSION_NAME)
-    if (administrator === null || administrator.deleted_at !== null) {
+    if (permission_service.getByName(ADMINISTRATOR_PERMISSION_NAME) === null) {
         console.error('Error: the administrator permission could not be created.')
         process.exit(1)
     }
 }
 
-// --------------------------------------------------------------------------------
-// The link that grants the admin user its rights.
-// --------------------------------------------------------------------------------
+// =====================================================================================
+// THE LINK THAT GRANTS THE ADMIN ACCOUNT ITS RIGHTS.
+// =====================================================================================
 
-// Grants the administrator permission to the seeded admin user. A permission is attached to a
-//  user through a relation record, never through a column, so this one call spans all three
+// Grants the administrator permission to the seeded account. A permission is attached to a
+//  user through a relation record, never through a column, so this one step spans three
 //  entities — which is exactly the kind of orchestration the seeder exists to hold.
-//  Idempotent, and it never overrides an existing link: an admin user deliberately moved to
-//  another permission keeps it.
 _.linkAdminUser = () => {
+    // Both ends of the link.
     const user = user_service.getAdminUser()
     const administrator = permission_service.getByName(ADMINISTRATOR_PERMISSION_NAME)
 
+    // Fail loudly, for the same reason as above: there is nothing to grant rights to.
     if (user === null || administrator === null) {
         console.error('Error: the admin user could not be linked to the administrator permission.')
         process.exit(1)
     }
 
-    // Any live permission already attached is enough to leave the account alone: an admin user
+    // Any live permission already attached is enough to leave the account alone: an admin
     //  deliberately moved to another permission, or given scoped ones, keeps what it has.
     if (permission_service.getAllByUserId(user.id).length > 0) return
 
+    // The link, built by the entity that owns it.
     const relation = relation_service.buildForCreate({
         id_1: user.id,
         entity_1: 'user',
@@ -109,69 +137,91 @@ _.linkAdminUser = () => {
         relation_type: 'linked',
         note: 'admin user granted the administrator permission'
     })
+
+    // A deleted link to the same permission is brought back rather than duplicated, exactly as
+    //  POST /api/relation/ does. Only when there is none is a new one created.
+    const revived = relation_service.reviveDeletedTwin(relation)
+    if (revived !== null) return
+
     relation_service.create(relation)
 }
 
-// --------------------------------------------------------------------------------
-// Seedable metadata and tags.
+// =====================================================================================
+// SEEDABLE METADATA AND TAGS.
 //
-// Nothing below is called by seed(): the application boots today without a single seeded
-//  metadata record or tag, and adding one is a decision the owner makes. They live here,
-//  written and tested ahead of that decision, so seeding one later is a single line inside
-//  seed() and never a new helper written in a hurry.
-//
-// Both entities own a UNIQUE name, so both walk into the trap the soft delete sets — the same
-//  one ensureDefaultPermission above is built around. Read that comment first: the shape here
-//  is deliberately identical.
-// --------------------------------------------------------------------------------
+//  Nothing below is called by seed(), on purpose. The application boots today without a
+//  single seeded metadata record or tag, and *which* rows exist by default is the owner's
+//  decision. They are written and tested ahead of it, so seeding one later is a single line
+//  inside seed() and never a helper improvised in a hurry against a UNIQUE column.
+// =====================================================================================
 
-// Writes one metadata record, unconditionally. It is the raw create — no guard, no lookup — so
-//  calling it for a name that already exists (trash can included) throws on the UNIQUE column.
-//  Use ensureMetadataByName below for anything that runs at boot.
+/**
+ * Writes one metadata record, unconditionally.
+ *
+ * The raw create: no lookup, no guard, so a name already taken — by a live record or by a
+ *  deleted one — throws on the UNIQUE column. At boot that means a crash on every restart,
+ *  which is why anything running at boot uses ensureMetadataByName below.
+ * @param {String} name The record name, in any casing.
+ * @param {String} value The value to store.
+ * @returns {Object} The stored row.
+ */
 _.createMetadata = (name, value) => {
+    // The model is built by the entity that owns it.
     const metadata = metadata_service.buildForCreate({ name, value })
-    metadata_service.create(metadata)
+    return metadata_service.create(metadata)
 }
 
-// Creates the record when it is missing, restores it when it sits in the trash can, and does
-//  nothing at all when a live row already holds the name.
-//
-// **The name is the only thing it looks at.** A live record keeps the value it has, even when
-//  the value passed here is a different one: `value` is what the record was *created* with, not
-//  what it must always say, so a value the owner edited through the API survives every restart.
-//  Seeding is "make sure this record exists", never "put this record back the way I wrote it" —
-//  the same rule ensureDefaultPermission follows with the four flags. Overwriting a stored value
-//  needs a deliberate update, not a boot.
+/**
+ * Makes sure one metadata record exists.
+ *
+ * **The name is the only thing it looks at.** A live record keeps the value it has, even when
+ *  the value passed here is a different one: `value` is what the record is *created* with,
+ *  never what it must always say, so a value the owner edited through the API survives every
+ *  restart. Keying the lookup on name and value would be the other trap: a record whose value
+ *  has since changed would look absent and be created again, over its taken name.
+ * @param {String} name The record name, in any casing.
+ * @param {String} value The value to create it with. A live record keeps the one it has.
+ */
 _.ensureMetadataByName = (name, value) => {
-    const current = metadata_service.getByName(name)
+    // Live: left exactly as it is.
+    if (metadata_service.getByName(name) !== null) return
 
-    if (current !== null && current.deleted_at === null) return
-    if (current !== null) return metadata_service.restoreFromTrashCanByName(name)
+    // Deleted: brought back with the value it had. metadata is keyed on the name.
+    if (metadata_service.getDeletedByName(name) !== null) return metadata_service.restoreSoftDeleteByName(name)
 
+    // Missing: created.
     _.createMetadata(name, value)
 }
 
-// Writes one tag, unconditionally. Same warning as createMetadata: no guard, so a name already
-//  taken — by a live tag or by one in the trash can — throws on the UNIQUE column. The metadata
-//  argument is the tag's own JSON blob (unrelated to the metadata entity) and may be omitted,
-//  which keeps the model default of '{}'.
+/**
+ * Writes one tag, unconditionally. Same warning as createMetadata: no guard, so a name
+ *  already taken throws on the UNIQUE column.
+ * @param {String} name The tag name, in any casing.
+ * @param {String} metadata Optional. The tag's own JSON blob, as text. Absent keeps the
+ *  model default, '{}'.
+ * @returns {Object} The stored row.
+ */
 _.createTag = (name, metadata) => {
+    // The model is built by the entity that owns it.
     const tag = tag_service.buildForCreate({ name, metadata })
-    tag_service.create(tag)
+    return tag_service.create(tag)
 }
 
-// The tag counterpart of ensureMetadataByName, rule for rule: the name decides, a live tag is
-//  left exactly as it is, and a trashed one is restored rather than re-created.
-//
-// One difference, and it comes from the schema: tag.name is UNIQUE COLLATE NOCASE, so the lookup
-//  ignores case and `Portrait` finds the tag stored as `portrait`. metadata.name has no
-//  collation, so there the two are different records.
+/**
+ * Makes sure one tag exists. The same rule as ensureMetadataByName, keyed the way tag is: a
+ *  deleted tag is restored by its id.
+ * @param {String} name The tag name, in any casing.
+ * @param {String} metadata Optional. The JSON blob to create it with.
+ */
 _.ensureTagByName = (name, metadata) => {
-    const current = tag_service.getByName(name)
+    // Live: left exactly as it is.
+    if (tag_service.getByName(name) !== null) return
 
-    if (current !== null && current.deleted_at === null) return
-    if (current !== null) return tag_service.restoreFromTrashCan(current.id)
+    // Deleted: brought back by its id, with the blob it had.
+    const deleted = tag_service.getDeletedByName(name)
+    if (deleted !== null) return tag_service.restoreSoftDelete(deleted.id)
 
+    // Missing: created.
     _.createTag(name, metadata)
 }
 

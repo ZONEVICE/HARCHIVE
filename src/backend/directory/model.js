@@ -1,14 +1,41 @@
+// =====================================================================================
+// MODEL.
+//
+//  A directory of the archive. The hierarchy is not a column here: what a directory contains
+//  and what sits next to it are relation records. The field order is the column order of
+//  CREATE TABLE and the argument order of setClass: id first, deleted_at last.
+// =====================================================================================
+
 class Directory {
-    // The id is assigned by the database (INTEGER PRIMARY KEY) on insert, so it starts null.
+    // Assigned by the database (INTEGER PRIMARY KEY) on insert, so it starts null.
     #id = null
+
+    // The directory name. Not UNIQUE and not an identity key: two directories under different
+    //  parents may share a name, so it is stored exactly as it arrived.
     #name = ''
-    // The three dates are the Unix Epoch in seconds, like every timestamp of the project.
-    //  They stay null while nothing has scanned the directory or read its filesystem dates.
+
+    // When the directory was last scanned, in epoch seconds. Null until something scans it.
     #date_scan = null
+
+    // The filesystem creation date, in epoch seconds. Null until something reads it.
     #date_creation = null
+
+    // The filesystem modification date, in epoch seconds. Null until something reads it.
     #date_last_modification = null
+
+    // Epoch seconds when the directory was deleted, or null while it is live. Only the
+    //  deleted-record primitives write it, so a model built for a write leaves it alone.
     #deleted_at = null
 
+    /**
+     * Fills every field at once, in column order.
+     * @param {Number} id Id of the stored directory. Null for one the database has not seen.
+     * @param {String} name The directory name.
+     * @param {Number} date_scan Optional. Epoch seconds of the last scan, or null.
+     * @param {Number} date_creation Optional. Epoch seconds of the creation, or null.
+     * @param {Number} date_last_modification Optional. Epoch seconds of the change, or null.
+     * @param {Number} deleted_at Epoch seconds of the deletion, or null when it is live.
+     */
     setClass(id, name, date_scan, date_creation, date_last_modification, deleted_at) {
         this.#id = id
         this.#name = name
@@ -18,6 +45,7 @@ class Directory {
         this.#deleted_at = deleted_at ?? null
     }
 
+    // One getter/setter pair per field, in the same order.
     get id() { return this.#id }
     set id(v) { this.#id = v }
 
@@ -36,5 +64,4 @@ class Directory {
     get deleted_at() { return this.#deleted_at }
     set deleted_at(v) { this.#deleted_at = v }
 }
-
 module.exports = Directory
