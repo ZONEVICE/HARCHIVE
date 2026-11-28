@@ -8,18 +8,18 @@
 
 class Metadata {
     // Assigned by the database (INTEGER PRIMARY KEY) on insert, so it starts null.
-    #id = null
+    id = null
 
     // The identity key: UNIQUE, and normalised by the service before it ever reaches SQL.
-    #name = ''
+    name = ''
 
     // Whatever the client sent, stored byte for byte. It is not an identity key, so nothing
     //  folds its case or touches its accents.
-    #value = ''
+    value = ''
 
     // Epoch seconds when the record was deleted, or null while it is live. Only the
     //  deleted-record primitives write it, so a model built for a write leaves it alone.
-    #deleted_at = null
+    deleted_at = null
 
     /**
      * Fills every field at once, in column order.
@@ -29,24 +29,28 @@ class Metadata {
      * @param {Number} deleted_at Epoch seconds of the deletion, or null when the record is live.
      */
     setClass(id, name, value, deleted_at) {
-        this.#id = id
-        this.#name = name
-        this.#value = value
-        this.#deleted_at = deleted_at ?? null
+        this.id = id
+        this.name = name
+        this.value = value
+        this.deleted_at = deleted_at ?? null
     }
 
-    // One getter/setter pair per field, in the same order.
-    get id() { return this.#id }
-    set id(v) { this.#id = v }
+    // One get/set pair per field, in the same order.
+    getId() { return this.id }
+    setId(v) { this.id = v }
 
-    get name() { return this.#name }
-    set name(v) { this.#name = v }
+    getName() { return this.name }
+    setName(v) { this.name = v }
 
-    get value() { return this.#value }
-    set value(v) { this.#value = v }
+    getValue() { return this.value }
+    setValue(v) { this.value = v }
 
-    get deleted_at() { return this.#deleted_at }
-    set deleted_at(v) { this.#deleted_at = v }
+    getDeletedAt() { return this.deleted_at }
+    setDeletedAt(v) { this.deleted_at = v }
 }
+
+// =====================================================================================
+// EXPORT.
+// =====================================================================================
 
 module.exports = Metadata

@@ -68,7 +68,7 @@ _.getById = (id) => readRow(db.prepare('SELECT * FROM directory WHERE id = ? AND
  */
 _.post = (directory) => readRow(db.prepare(
     'INSERT INTO directory (name, date_scan, date_creation, date_last_modification) VALUES (?, ?, ?, ?) RETURNING *'
-).get(directory.name, directory.date_scan, directory.date_creation, directory.date_last_modification))
+).get(directory.getName(), directory.getDateScan(), directory.getDateCreation(), directory.getDateLastModification()))
 
 /**
  * Overwrites a live directory with the values it carries.
@@ -77,7 +77,7 @@ _.post = (directory) => readRow(db.prepare(
  */
 _.update = (directory) => readRow(db.prepare(
     'UPDATE directory SET name = ?, date_scan = ?, date_creation = ?, date_last_modification = ? WHERE id = ? AND deleted_at IS NULL RETURNING *'
-).get(directory.name, directory.date_scan, directory.date_creation, directory.date_last_modification, directory.id))
+).get(directory.getName(), directory.getDateScan(), directory.getDateCreation(), directory.getDateLastModification(), directory.getId()))
 
 // =====================================================================================
 // DELETED RECORDS.

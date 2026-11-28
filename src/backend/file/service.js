@@ -84,10 +84,10 @@ _.buildForCreate = (body) => {
     // Nothing is normalised: this entity has no identity key, so every value is stored as it
     //  arrived.
     const file = new File()
-    file.name = body.name
-    file.hash_256_sha = body.hash_256_sha
-    file.relative_path = body.relative_path
-    file.extension = body.extension
+    file.setName(body.name)
+    file.setHash256Sha(body.hash_256_sha)
+    file.setRelativePath(body.relative_path)
+    file.setExtension(body.extension)
 
     return file
 }

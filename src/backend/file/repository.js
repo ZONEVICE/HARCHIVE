@@ -67,7 +67,7 @@ _.getById = (id) => readRow(db.prepare('SELECT * FROM file WHERE id = ? AND dele
  */
 _.post = (file) => readRow(db.prepare(
     'INSERT INTO file (name, hash_256_sha, relative_path, extension) VALUES (?, ?, ?, ?) RETURNING *'
-).get(file.name, file.hash_256_sha, file.relative_path, file.extension))
+).get(file.getName(), file.getHash256Sha(), file.getRelativePath(), file.getExtension()))
 
 /**
  * Overwrites a live file with the values it carries.
@@ -76,7 +76,7 @@ _.post = (file) => readRow(db.prepare(
  */
 _.update = (file) => readRow(db.prepare(
     'UPDATE file SET name = ?, hash_256_sha = ?, relative_path = ?, extension = ? WHERE id = ? AND deleted_at IS NULL RETURNING *'
-).get(file.name, file.hash_256_sha, file.relative_path, file.extension, file.id))
+).get(file.getName(), file.getHash256Sha(), file.getRelativePath(), file.getExtension(), file.getId()))
 
 // =====================================================================================
 // DELETED RECORDS.

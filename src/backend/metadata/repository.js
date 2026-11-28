@@ -70,7 +70,7 @@ _.getByName = (name) => readRow(db.prepare('SELECT * FROM metadata WHERE name = 
  */
 _.post = (metadata) => readRow(db.prepare(
     'INSERT INTO metadata (name, value) VALUES (?, ?) RETURNING *'
-).get(metadata.name, metadata.value))
+).get(metadata.getName(), metadata.getValue()))
 
 /**
  * Overwrites a live metadata record with the values it carries.
@@ -79,7 +79,7 @@ _.post = (metadata) => readRow(db.prepare(
  */
 _.update = (metadata) => readRow(db.prepare(
     'UPDATE metadata SET name = ?, value = ? WHERE id = ? AND deleted_at IS NULL RETURNING *'
-).get(metadata.name, metadata.value, metadata.id))
+).get(metadata.getName(), metadata.getValue(), metadata.getId()))
 
 // =====================================================================================
 // DELETED RECORDS.

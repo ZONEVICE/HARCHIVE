@@ -82,8 +82,8 @@ describe('getDeletedByEntityId', () => {
 
 describe('getDeletedByEnds', () => {
     it('finds it by its five identifying values, and the live lookup does not', () => {
-        expect(relation_service.getDeletedByEnds(SAMPLE).id).toBe(deleted_id)
-        expect(relation_service.getByEnds(SAMPLE)).toBeNull()
+        expect(relation_service.getDeletedByEnds(relation_service.buildForCreate(SAMPLE)).id).toBe(deleted_id)
+        expect(relation_service.getByEnds(relation_service.buildForCreate(SAMPLE))).toBeNull()
     })
 
     it('answers the most recent of several deleted twins', () => {
@@ -96,7 +96,7 @@ describe('getDeletedByEnds', () => {
         relation_service.softDelete(newer.id)
         relation_service.softDelete(older.id)
 
-        expect(relation_service.getDeletedByEnds(body).id).toBe(newer.id)
+        expect(relation_service.getDeletedByEnds(relation_service.buildForCreate(body)).id).toBe(newer.id)
     })
 })
 

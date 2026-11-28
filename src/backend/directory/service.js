@@ -83,12 +83,12 @@ _.hardDelete = (id) => repository.deleteById(id)
 _.buildForCreate = (body) => {
     // The name is required. Nothing is normalised: this entity has no identity key.
     const directory = new Directory()
-    directory.name = body.name
+    directory.setName(body.name)
 
     // The three dates are optional, and a date the client omits is stored as NULL.
-    directory.date_scan = body.date_scan ?? null
-    directory.date_creation = body.date_creation ?? null
-    directory.date_last_modification = body.date_last_modification ?? null
+    directory.setDateScan(body.date_scan ?? null)
+    directory.setDateCreation(body.date_creation ?? null)
+    directory.setDateLastModification(body.date_last_modification ?? null)
 
     return directory
 }

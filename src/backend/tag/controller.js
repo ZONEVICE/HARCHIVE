@@ -83,10 +83,10 @@ _.post = async (req, res) => {
 
         // A name held by a live tag, or by a deleted one, is a 409 and never a 500 from the
         //  UNIQUE column. The two get different descriptions so the client can explain them.
-        if (service.isNameTaken(tag.name) === true) {
+        if (service.isNameTaken(tag.getName()) === true) {
             return res.status(409).json({ status: 'warning', description: 'tag already exists' })
         }
-        if (service.isNameHeldByDeleted(tag.name) === true) {
+        if (service.isNameHeldByDeleted(tag.getName()) === true) {
             return res.status(409).json({ status: 'warning', description: 'tag name held by a deleted record' })
         }
 
@@ -118,10 +118,10 @@ _.update = async (req, res) => {
         const tag = service.buildForUpdate(req.body)
 
         // Renaming onto a name another live tag holds is a conflict; keeping its own is not.
-        if (service.isNameTakenByAnother(tag.name, tag.id) === true) {
+        if (service.isNameTakenByAnother(tag.getName(), tag.getId()) === true) {
             return res.status(409).json({ status: 'warning', description: 'tag already exists' })
         }
-        if (service.isNameHeldByDeleted(tag.name) === true) {
+        if (service.isNameHeldByDeleted(tag.getName()) === true) {
             return res.status(409).json({ status: 'warning', description: 'tag name held by a deleted record' })
         }
 

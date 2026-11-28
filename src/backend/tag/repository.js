@@ -69,7 +69,7 @@ _.getByName = (name) => readRow(db.prepare('SELECT * FROM tag WHERE name = ? AND
  */
 _.post = (tag) => readRow(db.prepare(
     'INSERT INTO tag (name, metadata) VALUES (?, ?) RETURNING *'
-).get(tag.name, tag.metadata))
+).get(tag.getName(), tag.getMetadata()))
 
 /**
  * Overwrites a live tag with the values it carries.
@@ -78,7 +78,7 @@ _.post = (tag) => readRow(db.prepare(
  */
 _.update = (tag) => readRow(db.prepare(
     'UPDATE tag SET name = ?, metadata = ? WHERE id = ? AND deleted_at IS NULL RETURNING *'
-).get(tag.name, tag.metadata, tag.id))
+).get(tag.getName(), tag.getMetadata(), tag.getId()))
 
 // =====================================================================================
 // DELETED RECORDS.

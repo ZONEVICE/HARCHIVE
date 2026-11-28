@@ -115,9 +115,9 @@ _.normalizePathAbsolute = (path_absolute) => path_absolute.normalize('NFC').trim
 _.buildForCreate = (body) => {
     // The identity key is the one field normalised; the rest are stored as they came.
     const workspace = new WorkSpace()
-    workspace.name = body.name
-    workspace.path_absolute = _.normalizePathAbsolute(body.path_absolute)
-    workspace.path_relative = body.path_relative
+    workspace.setName(body.name)
+    workspace.setPathAbsolute(_.normalizePathAbsolute(body.path_absolute))
+    workspace.setPathRelative(body.path_relative)
 
     return workspace
 }

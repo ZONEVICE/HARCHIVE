@@ -101,11 +101,11 @@ _.buildForCreate = (body) => {
     // Both username columns come from the same input: the normalised key, and the spelling as
     //  it was typed, composed and trimmed but never folded.
     const user = new User()
-    user.username = _.normalizeUsername(body.username)
-    user.username_cased = body.username.normalize('NFC').trim()
+    user.setUsername(_.normalizeUsername(body.username))
+    user.setUsernameCased(body.username.normalize('NFC').trim())
 
     // Plain text until bcrypt lands, composed like every password.
-    user.password = _.normalizePassword(body.password)
+    user.setPassword(_.normalizePassword(body.password))
 
     return user
 }

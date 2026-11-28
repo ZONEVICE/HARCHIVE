@@ -73,7 +73,7 @@ _.getByUsername = (username) => readRow(db.prepare('SELECT * FROM user WHERE use
  */
 _.post = (user) => readRow(db.prepare(
     'INSERT INTO user (username, username_cased, password) VALUES (?, ?, ?) RETURNING *'
-).get(user.username, user.username_cased, user.password))
+).get(user.getUsername(), user.getUsernameCased(), user.getPassword()))
 
 /**
  * Writes a new password over the stored one. The entity's own write: no route edits anything

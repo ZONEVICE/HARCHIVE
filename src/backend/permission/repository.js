@@ -81,12 +81,12 @@ _.getByName = (name) => readRow(db.prepare('SELECT * FROM permission WHERE name 
 _.post = (permission) => readRow(db.prepare(
     'INSERT INTO permission (name, entity, can_read, can_create, can_edit, can_delete) VALUES (?, ?, ?, ?, ?, ?) RETURNING *'
 ).get(
-    permission.name,
-    permission.entity,
-    toInteger(permission.can_read),
-    toInteger(permission.can_create),
-    toInteger(permission.can_edit),
-    toInteger(permission.can_delete)
+    permission.getName(),
+    permission.getEntity(),
+    toInteger(permission.getCanRead()),
+    toInteger(permission.getCanCreate()),
+    toInteger(permission.getCanEdit()),
+    toInteger(permission.getCanDelete())
 ))
 
 /**
@@ -98,13 +98,13 @@ _.post = (permission) => readRow(db.prepare(
 _.update = (permission) => readRow(db.prepare(
     'UPDATE permission SET name = ?, entity = ?, can_read = ?, can_create = ?, can_edit = ?, can_delete = ? WHERE id = ? AND deleted_at IS NULL RETURNING *'
 ).get(
-    permission.name,
-    permission.entity,
-    toInteger(permission.can_read),
-    toInteger(permission.can_create),
-    toInteger(permission.can_edit),
-    toInteger(permission.can_delete),
-    permission.id
+    permission.getName(),
+    permission.getEntity(),
+    toInteger(permission.getCanRead()),
+    toInteger(permission.getCanCreate()),
+    toInteger(permission.getCanEdit()),
+    toInteger(permission.getCanDelete()),
+    permission.getId()
 ))
 
 // =====================================================================================

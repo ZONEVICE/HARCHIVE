@@ -106,8 +106,8 @@ _.buildForCreate = (body) => {
     // The identity key is the one field normalised. The value is assigned unconditionally:
     //  a metadata record *is* its value.
     const metadata = new Metadata()
-    metadata.name = _.normalizeName(body.name)
-    metadata.value = body.value
+    metadata.setName(_.normalizeName(body.name))
+    metadata.setValue(body.value)
 
     return metadata
 }

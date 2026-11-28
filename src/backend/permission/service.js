@@ -119,15 +119,15 @@ _.normalizeName = (name) => name.normalize('NFC').trim().toLowerCase()
 _.buildForCreate = (body) => {
     // The identity key is the one field normalised.
     const permission = new Permission()
-    permission.name = _.normalizeName(body.name)
+    permission.setName(_.normalizeName(body.name))
 
     // Each field is assigned only when it was sent, so an omitted one keeps the model default
     //  — which for the four flags is false, the answer that grants nothing.
-    if (body.entity !== undefined) permission.entity = body.entity
-    if (body.can_read !== undefined) permission.can_read = body.can_read
-    if (body.can_create !== undefined) permission.can_create = body.can_create
-    if (body.can_edit !== undefined) permission.can_edit = body.can_edit
-    if (body.can_delete !== undefined) permission.can_delete = body.can_delete
+    if (body.entity !== undefined) permission.setEntity(body.entity)
+    if (body.can_read !== undefined) permission.setCanRead(body.can_read)
+    if (body.can_create !== undefined) permission.setCanCreate(body.can_create)
+    if (body.can_edit !== undefined) permission.setCanEdit(body.can_edit)
+    if (body.can_delete !== undefined) permission.setCanDelete(body.can_delete)
 
     return permission
 }

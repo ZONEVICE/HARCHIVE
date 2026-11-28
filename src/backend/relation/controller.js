@@ -141,7 +141,7 @@ _.post = async (req, res) => {
 
         // Both ends must be entities that own a table: an entity with none has no record to
         //  point at.
-        if (service.isEntityRelatable(relation.entity_1) === false || service.isEntityRelatable(relation.entity_2) === false) {
+        if (service.isEntityRelatable(relation.getEntity1()) === false || service.isEntityRelatable(relation.getEntity2()) === false) {
             return res.status(400).json({ status: 'warning', description: 'relation entity invalid' })
         }
 
@@ -193,7 +193,7 @@ _.update = async (req, res) => {
         const relation = service.buildForUpdate(req.body)
 
         // The same three guards as a create, the duplicate one ignoring the relation itself.
-        if (service.isEntityRelatable(relation.entity_1) === false || service.isEntityRelatable(relation.entity_2) === false) {
+        if (service.isEntityRelatable(relation.getEntity1()) === false || service.isEntityRelatable(relation.getEntity2()) === false) {
             return res.status(400).json({ status: 'warning', description: 'relation entity invalid' })
         }
         if (service.isReflexive(relation) === true) {

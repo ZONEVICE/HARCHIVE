@@ -89,10 +89,10 @@ _.post = async (req, res) => {
 
         // A name held by a live permission, or by a deleted one, is a 409 and never a 500 from the
         //  UNIQUE column. The two get different descriptions so the client can explain them.
-        if (service.isNameTaken(permission.name) === true) {
+        if (service.isNameTaken(permission.getName()) === true) {
             return res.status(409).json({ status: 'warning', description: 'permission already exists' })
         }
-        if (service.isNameHeldByDeleted(permission.name) === true) {
+        if (service.isNameHeldByDeleted(permission.getName()) === true) {
             return res.status(409).json({ status: 'warning', description: 'permission name held by a deleted record' })
         }
 
@@ -129,10 +129,10 @@ _.update = async (req, res) => {
         const permission = service.buildForUpdate(req.body)
 
         // Renaming onto a name another live permission holds is a conflict; keeping its own is not.
-        if (service.isNameTakenByAnother(permission.name, permission.id) === true) {
+        if (service.isNameTakenByAnother(permission.getName(), permission.getId()) === true) {
             return res.status(409).json({ status: 'warning', description: 'permission already exists' })
         }
-        if (service.isNameHeldByDeleted(permission.name) === true) {
+        if (service.isNameHeldByDeleted(permission.getName()) === true) {
             return res.status(409).json({ status: 'warning', description: 'permission name held by a deleted record' })
         }
 

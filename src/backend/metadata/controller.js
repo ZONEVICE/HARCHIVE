@@ -84,10 +84,10 @@ _.post = async (req, res) => {
 
         // A name held by a live record, or by a deleted one, is a 409 and never a 500 from the
         //  UNIQUE column. The two get different descriptions so the client can explain them.
-        if (service.isNameTaken(metadata.name) === true) {
+        if (service.isNameTaken(metadata.getName()) === true) {
             return res.status(409).json({ status: 'warning', description: 'metadata already exists' })
         }
-        if (service.isNameHeldByDeleted(metadata.name) === true) {
+        if (service.isNameHeldByDeleted(metadata.getName()) === true) {
             return res.status(409).json({ status: 'warning', description: 'metadata name held by a deleted record' })
         }
 
@@ -119,10 +119,10 @@ _.update = async (req, res) => {
         const metadata = service.buildForUpdate(req.body)
 
         // Renaming onto a name another live record holds is a conflict; keeping its own is not.
-        if (service.isNameTakenByAnother(metadata.name, metadata.id) === true) {
+        if (service.isNameTakenByAnother(metadata.getName(), metadata.getId()) === true) {
             return res.status(409).json({ status: 'warning', description: 'metadata already exists' })
         }
-        if (service.isNameHeldByDeleted(metadata.name) === true) {
+        if (service.isNameHeldByDeleted(metadata.getName()) === true) {
             return res.status(409).json({ status: 'warning', description: 'metadata name held by a deleted record' })
         }
 

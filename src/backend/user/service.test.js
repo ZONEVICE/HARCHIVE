@@ -54,7 +54,8 @@ describe('buildForCreate and create', () => {
     })
 
     it('answers a plain row, never a model instance', () => {
-        // A model keeps its fields private, so JSON of an instance would be {}.
+        // A row is a plain object: it carries the columns and none of the model's accessors.
+        expect(created.getUsername).toBeUndefined()
         expect(JSON.parse(JSON.stringify(created)).username).toBe(USERNAME_STORED)
     })
 })

@@ -90,12 +90,13 @@ _.getByEntityId = (entity_id) => db.prepare(
 /**
  * Reads the live relation with exactly these two ends and this type — the five columns that
  *  identify a link.
- * @param {Object} relation Carries id_1, entity_1, id_2, entity_2 and relation_type.
+ * @param {Object} relation A Relation model; its id_1, entity_1, id_2, entity_2 and
+ *  relation_type are read through its get methods.
  * @returns {Object|null} The row, or null when no live relation has those five values.
  */
 _.getByEnds = (relation) => readRow(db.prepare(
     'SELECT * FROM relation WHERE id_1 = ? AND entity_1 = ? AND id_2 = ? AND entity_2 = ? AND relation_type = ? AND deleted_at IS NULL'
-).get(relation.id_1, relation.entity_1, relation.id_2, relation.entity_2, relation.relation_type))
+).get(relation.getId1(), relation.getEntity1(), relation.getId2(), relation.getEntity2(), relation.getRelationType()))
 
 // =====================================================================================
 // WRITES.
@@ -111,7 +112,7 @@ _.getByEnds = (relation) => readRow(db.prepare(
  */
 _.post = (relation) => readRow(db.prepare(
     'INSERT INTO relation (id_1, entity_1, id_2, entity_2, relation_type, note) VALUES (?, ?, ?, ?, ?, ?) RETURNING *'
-).get(relation.id_1, relation.entity_1, relation.id_2, relation.entity_2, relation.relation_type, relation.note))
+).get(relation.getId1(), relation.getEntity1(), relation.getId2(), relation.getEntity2(), relation.getRelationType(), relation.getNote()))
 
 /**
  * Overwrites a live relation with the values it carries.
@@ -121,7 +122,7 @@ _.post = (relation) => readRow(db.prepare(
  */
 _.update = (relation) => readRow(db.prepare(
     'UPDATE relation SET id_1 = ?, entity_1 = ?, id_2 = ?, entity_2 = ?, relation_type = ?, note = ? WHERE id = ? AND deleted_at IS NULL RETURNING *'
-).get(relation.id_1, relation.entity_1, relation.id_2, relation.entity_2, relation.relation_type, relation.note, relation.id))
+).get(relation.getId1(), relation.getEntity1(), relation.getId2(), relation.getEntity2(), relation.getRelationType(), relation.getNote(), relation.getId()))
 
 // =====================================================================================
 // DELETED RECORDS.
@@ -167,12 +168,13 @@ _.getDeletedByEntityId = (entity_id) => db.prepare(
 /**
  * Reads a deleted relation with exactly these two ends and this type. When several were
  *  deleted over time, the most recent id answers, so the choice is a rule and not rowid luck.
- * @param {Object} relation Carries id_1, entity_1, id_2, entity_2 and relation_type.
+ * @param {Object} relation A Relation model; its id_1, entity_1, id_2, entity_2 and
+ *  relation_type are read through its get methods.
  * @returns {Object|null} The row, or null when no deleted relation has those five values.
  */
 _.getDeletedByEnds = (relation) => readRow(db.prepare(
     'SELECT * FROM relation WHERE id_1 = ? AND entity_1 = ? AND id_2 = ? AND entity_2 = ? AND relation_type = ? AND deleted_at IS NOT NULL ORDER BY id DESC'
-).get(relation.id_1, relation.entity_1, relation.id_2, relation.entity_2, relation.relation_type))
+).get(relation.getId1(), relation.getEntity1(), relation.getId2(), relation.getEntity2(), relation.getRelationType()))
 
 /**
  * Marks a live relation as deleted. One already deleted is not matched, so its first stamp

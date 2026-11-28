@@ -8,21 +8,21 @@
 
 class WorkSpace {
     // Assigned by the database (INTEGER PRIMARY KEY) on insert, so it starts null.
-    #id = null
+    id = null
 
     // What the owner calls this workspace. Free text, not UNIQUE.
-    #name = ''
+    name = ''
 
     // The identity key: the absolute directory on disk, UNIQUE, so two workspaces cannot
     //  point at the same place. Normalised by the service, case included — see the note there.
-    #path_absolute = ''
+    path_absolute = ''
 
     // The path as the client wants it shown. Nothing derives it from path_absolute today.
-    #path_relative = ''
+    path_relative = ''
 
     // Epoch seconds when the workspace was deleted, or null while it is live. Only the
     //  deleted-record primitives write it, so a model built for a write leaves it alone.
-    #deleted_at = null
+    deleted_at = null
 
     /**
      * Fills every field at once, in column order.
@@ -33,27 +33,32 @@ class WorkSpace {
      * @param {Number} deleted_at Epoch seconds of the deletion, or null when it is live.
      */
     setClass(id, name, path_absolute, path_relative, deleted_at) {
-        this.#id = id
-        this.#name = name
-        this.#path_absolute = path_absolute
-        this.#path_relative = path_relative
-        this.#deleted_at = deleted_at ?? null
+        this.id = id
+        this.name = name
+        this.path_absolute = path_absolute
+        this.path_relative = path_relative
+        this.deleted_at = deleted_at ?? null
     }
 
-    // One getter/setter pair per field, in the same order.
-    get id() { return this.#id }
-    set id(v) { this.#id = v }
+    // One get/set pair per field, in the same order.
+    getId() { return this.id }
+    setId(v) { this.id = v }
 
-    get name() { return this.#name }
-    set name(v) { this.#name = v }
+    getName() { return this.name }
+    setName(v) { this.name = v }
 
-    get path_absolute() { return this.#path_absolute }
-    set path_absolute(v) { this.#path_absolute = v }
+    getPathAbsolute() { return this.path_absolute }
+    setPathAbsolute(v) { this.path_absolute = v }
 
-    get path_relative() { return this.#path_relative }
-    set path_relative(v) { this.#path_relative = v }
+    getPathRelative() { return this.path_relative }
+    setPathRelative(v) { this.path_relative = v }
 
-    get deleted_at() { return this.#deleted_at }
-    set deleted_at(v) { this.#deleted_at = v }
+    getDeletedAt() { return this.deleted_at }
+    setDeletedAt(v) { this.deleted_at = v }
 }
+
+// =====================================================================================
+// EXPORT.
+// =====================================================================================
+
 module.exports = WorkSpace

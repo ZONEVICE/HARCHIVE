@@ -104,10 +104,10 @@ _.normalizeName = (name) => name.normalize('NFC').trim().toLowerCase()
 _.buildForCreate = (body) => {
     // The identity key is the one field normalised; the blob is stored as it came.
     const tag = new Tag()
-    tag.name = _.normalizeName(body.name)
+    tag.setName(_.normalizeName(body.name))
 
     // Assigned only when it was sent, so an omitted blob keeps the model's own default.
-    if (body.metadata !== undefined) tag.metadata = body.metadata
+    if (body.metadata !== undefined) tag.setMetadata(body.metadata)
 
     return tag
 }

@@ -8,24 +8,24 @@
 
 class Directory {
     // Assigned by the database (INTEGER PRIMARY KEY) on insert, so it starts null.
-    #id = null
+    id = null
 
     // The directory name. Not UNIQUE and not an identity key: two directories under different
     //  parents may share a name, so it is stored exactly as it arrived.
-    #name = ''
+    name = ''
 
     // When the directory was last scanned, in epoch seconds. Null until something scans it.
-    #date_scan = null
+    date_scan = null
 
     // The filesystem creation date, in epoch seconds. Null until something reads it.
-    #date_creation = null
+    date_creation = null
 
     // The filesystem modification date, in epoch seconds. Null until something reads it.
-    #date_last_modification = null
+    date_last_modification = null
 
     // Epoch seconds when the directory was deleted, or null while it is live. Only the
     //  deleted-record primitives write it, so a model built for a write leaves it alone.
-    #deleted_at = null
+    deleted_at = null
 
     /**
      * Fills every field at once, in column order.
@@ -37,31 +37,36 @@ class Directory {
      * @param {Number} deleted_at Epoch seconds of the deletion, or null when it is live.
      */
     setClass(id, name, date_scan, date_creation, date_last_modification, deleted_at) {
-        this.#id = id
-        this.#name = name
-        this.#date_scan = date_scan ?? null
-        this.#date_creation = date_creation ?? null
-        this.#date_last_modification = date_last_modification ?? null
-        this.#deleted_at = deleted_at ?? null
+        this.id = id
+        this.name = name
+        this.date_scan = date_scan ?? null
+        this.date_creation = date_creation ?? null
+        this.date_last_modification = date_last_modification ?? null
+        this.deleted_at = deleted_at ?? null
     }
 
-    // One getter/setter pair per field, in the same order.
-    get id() { return this.#id }
-    set id(v) { this.#id = v }
+    // One get/set pair per field, in the same order.
+    getId() { return this.id }
+    setId(v) { this.id = v }
 
-    get name() { return this.#name }
-    set name(v) { this.#name = v }
+    getName() { return this.name }
+    setName(v) { this.name = v }
 
-    get date_scan() { return this.#date_scan }
-    set date_scan(v) { this.#date_scan = v }
+    getDateScan() { return this.date_scan }
+    setDateScan(v) { this.date_scan = v }
 
-    get date_creation() { return this.#date_creation }
-    set date_creation(v) { this.#date_creation = v }
+    getDateCreation() { return this.date_creation }
+    setDateCreation(v) { this.date_creation = v }
 
-    get date_last_modification() { return this.#date_last_modification }
-    set date_last_modification(v) { this.#date_last_modification = v }
+    getDateLastModification() { return this.date_last_modification }
+    setDateLastModification(v) { this.date_last_modification = v }
 
-    get deleted_at() { return this.#deleted_at }
-    set deleted_at(v) { this.#deleted_at = v }
+    getDeletedAt() { return this.deleted_at }
+    setDeletedAt(v) { this.deleted_at = v }
 }
+
+// =====================================================================================
+// EXPORT.
+// =====================================================================================
+
 module.exports = Directory

@@ -72,7 +72,7 @@ _.getByPathAbsolute = (path_absolute) => readRow(db.prepare('SELECT * FROM works
  */
 _.post = (workspace) => readRow(db.prepare(
     'INSERT INTO workspace (name, path_absolute, path_relative) VALUES (?, ?, ?) RETURNING *'
-).get(workspace.name, workspace.path_absolute, workspace.path_relative))
+).get(workspace.getName(), workspace.getPathAbsolute(), workspace.getPathRelative()))
 
 /**
  * Overwrites a live workspace with the values it carries.
@@ -81,7 +81,7 @@ _.post = (workspace) => readRow(db.prepare(
  */
 _.update = (workspace) => readRow(db.prepare(
     'UPDATE workspace SET name = ?, path_absolute = ?, path_relative = ? WHERE id = ? AND deleted_at IS NULL RETURNING *'
-).get(workspace.name, workspace.path_absolute, workspace.path_relative, workspace.id))
+).get(workspace.getName(), workspace.getPathAbsolute(), workspace.getPathRelative(), workspace.getId()))
 
 // =====================================================================================
 // DELETED RECORDS.

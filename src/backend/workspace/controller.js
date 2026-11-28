@@ -67,10 +67,10 @@ _.post = async (req, res) => {
 
         // A path held by a live workspace, or by a deleted one, is a 409 and never a 500 from
         //  the UNIQUE column. The two get different descriptions so the client can explain them.
-        if (service.isPathTaken(workspace.path_absolute) === true) {
+        if (service.isPathTaken(workspace.getPathAbsolute()) === true) {
             return res.status(409).json({ status: 'warning', description: 'workspace already exists' })
         }
-        if (service.isPathHeldByDeleted(workspace.path_absolute) === true) {
+        if (service.isPathHeldByDeleted(workspace.getPathAbsolute()) === true) {
             return res.status(409).json({ status: 'warning', description: 'workspace path held by a deleted record' })
         }
 
@@ -103,10 +103,10 @@ _.update = async (req, res) => {
         const workspace = service.buildForUpdate(req.body)
 
         // Moving onto a path another live workspace holds is a conflict; keeping its own is not.
-        if (service.isPathTakenByAnother(workspace.path_absolute, workspace.id) === true) {
+        if (service.isPathTakenByAnother(workspace.getPathAbsolute(), workspace.getId()) === true) {
             return res.status(409).json({ status: 'warning', description: 'workspace already exists' })
         }
-        if (service.isPathHeldByDeleted(workspace.path_absolute) === true) {
+        if (service.isPathHeldByDeleted(workspace.getPathAbsolute()) === true) {
             return res.status(409).json({ status: 'warning', description: 'workspace path held by a deleted record' })
         }
 

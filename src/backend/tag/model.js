@@ -8,18 +8,18 @@
 
 class Tag {
     // Assigned by the database (INTEGER PRIMARY KEY) on insert, so it starts null.
-    #id = null
+    id = null
 
     // The identity key: UNIQUE, and normalised by the service before it ever reaches SQL.
-    #name = ''
+    name = ''
 
     // The tag's own JSON blob, stored as the text the client sent. Unrelated to the metadata
     //  entity, which is a different thing with the same word.
-    #metadata = '{}'
+    metadata = '{}'
 
     // Epoch seconds when the tag was deleted, or null while it is live. Only the deleted-record
     //  primitives write it, so a model built for a write leaves it alone.
-    #deleted_at = null
+    deleted_at = null
 
     /**
      * Fills every field at once, in column order.
@@ -29,23 +29,28 @@ class Tag {
      * @param {Number} deleted_at Epoch seconds of the deletion, or null when the tag is live.
      */
     setClass(id, name, metadata, deleted_at) {
-        this.#id = id
-        this.#name = name
-        this.#metadata = metadata
-        this.#deleted_at = deleted_at ?? null
+        this.id = id
+        this.name = name
+        this.metadata = metadata
+        this.deleted_at = deleted_at ?? null
     }
 
-    // One getter/setter pair per field, in the same order.
-    get id() { return this.#id }
-    set id(v) { this.#id = v }
+    // One get/set pair per field, in the same order.
+    getId() { return this.id }
+    setId(v) { this.id = v }
 
-    get name() { return this.#name }
-    set name(v) { this.#name = v }
+    getName() { return this.name }
+    setName(v) { this.name = v }
 
-    get metadata() { return this.#metadata }
-    set metadata(v) { this.#metadata = v }
+    getMetadata() { return this.metadata }
+    setMetadata(v) { this.metadata = v }
 
-    get deleted_at() { return this.#deleted_at }
-    set deleted_at(v) { this.#deleted_at = v }
+    getDeletedAt() { return this.deleted_at }
+    setDeletedAt(v) { this.deleted_at = v }
 }
+
+// =====================================================================================
+// EXPORT.
+// =====================================================================================
+
 module.exports = Tag

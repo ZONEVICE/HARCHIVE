@@ -115,7 +115,7 @@ _.reviveDeletedTwin = (relation) => {
     repository.restoreSoftDelete(twin.id)
 
     // The note is the one value the request may change: it says what the link means now.
-    relation.id = twin.id
+    relation.setId(twin.id)
     return repository.update(relation)
 }
 
@@ -164,14 +164,14 @@ _.getTypes = () => [...RELATION_TYPES]
 _.buildForCreate = (body) => {
     // The two ends and the type, as they arrived. Nothing here is an identity key.
     const relation = new Relation()
-    relation.id_1 = body.id_1
-    relation.entity_1 = body.entity_1
-    relation.id_2 = body.id_2
-    relation.entity_2 = body.entity_2
-    relation.relation_type = body.relation_type
+    relation.setId1(body.id_1)
+    relation.setEntity1(body.entity_1)
+    relation.setId2(body.id_2)
+    relation.setEntity2(body.entity_2)
+    relation.setRelationType(body.relation_type)
 
     // The note is free text nothing branches on, so an absent one is simply null.
-    relation.note = body.note ?? null
+    relation.setNote(body.note ?? null)
 
     return relation
 }
@@ -234,7 +234,7 @@ _.isEntityRelatable = (entity) => {
  * @param {Object} relation The relation to check.
  * @returns {Boolean} True when the relation would link a record to itself.
  */
-_.isReflexive = (relation) => relation.id_1 === relation.id_2 && relation.entity_1 === relation.entity_2
+_.isReflexive = (relation) => relation.getId1() === relation.getId2() && relation.getEntity1() === relation.getEntity2()
 
 // True when a live relation already has these two ends and this type.
 _.isLinkTaken = (relation) => _.getByEnds(relation) !== null
@@ -251,7 +251,7 @@ _.isLinkTakenByAnother = (relation) => {
     if (clash === null) return false
 
     // Held by the relation itself: still free for it.
-    return clash.id !== relation.id
+    return clash.id !== relation.getId()
 }
 
 module.exports = _
